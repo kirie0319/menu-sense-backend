@@ -40,12 +40,19 @@ if google_credentials_json:
         import json
         from google.oauth2 import service_account
         
+        # 改行文字やエスケープシーケンスを正規化
+        credentials_json_cleaned = google_credentials_json.replace('\\n', '\n').replace('\\"', '"')
+        
         # JSON文字列をパース
-        credentials_info = json.loads(google_credentials_json)
+        credentials_info = json.loads(credentials_json_cleaned)
         google_credentials = service_account.Credentials.from_service_account_info(credentials_info)
         print("✅ Google Cloud credentials loaded from environment variable")
+    except json.JSONDecodeError as e:
+        print(f"⚠️ Failed to parse Google credentials JSON: {e}")
+        print(f"   First 100 chars: {google_credentials_json[:100]}...")
+        google_credentials = None
     except Exception as e:
-        print(f"⚠️ Failed to load Google credentials from JSON: {e}")
+        print(f"⚠️ Failed to load Google credentials: {e}")
         google_credentials = None
 else:
     print("⚠️ GOOGLE_CREDENTIALS_JSON not found in environment variables")
@@ -2166,14 +2173,42 @@ async def receive_pong(session_id: str):
 @app.get("/health")
 async def health_check():
     """ヘルスチェックエンドポイント"""
+    
+    # サービス状態の詳細情報
+    services_detail = {}
+    
+    if VISION_AVAILABLE:
+        services_detail["vision_api"] = {"status": "available", "client": "initialized"}
+    else:
+        services_detail["vision_api"] = {"status": "unavailable", "reason": "initialization_failed"}
+    
+    if TRANSLATE_AVAILABLE:
+        services_detail["translate_api"] = {"status": "available", "client": "initialized"}
+    else:
+        services_detail["translate_api"] = {"status": "unavailable", "reason": "initialization_failed"}
+    
+    if OPENAI_AVAILABLE:
+        services_detail["openai_api"] = {"status": "available", "client": "initialized"}
+    else:
+        services_detail["openai_api"] = {"status": "unavailable", "reason": "missing_api_key"}
+    
+    # アプリケーション全体の状態
+    overall_status = "healthy" if any([VISION_AVAILABLE, TRANSLATE_AVAILABLE, OPENAI_AVAILABLE]) else "degraded"
+    
     return {
-        "status": "healthy",
+        "status": overall_status,
         "version": "1.0.0",
+        "timestamp": asyncio.get_event_loop().time(),
+        "environment": {
+            "port": os.getenv("PORT", "8000"),
+            "google_credentials": "loaded" if google_credentials else "not_loaded"
+        },
         "services": {
             "vision_api": VISION_AVAILABLE,
             "translate_api": TRANSLATE_AVAILABLE,
             "openai_api": OPENAI_AVAILABLE
         },
+        "services_detail": services_detail,
         "ping_pong_sessions": len(ping_pong_sessions)
     }
 
@@ -2260,4 +2295,5 @@ async def translate_menu(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    port = int(os.getenv("PORT", 8000))  # Railway用のポート設定
+    uvicorn.run(app, host="0.0.0.0", port=port) 
