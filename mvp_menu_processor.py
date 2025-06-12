@@ -70,6 +70,7 @@ try:
 except Exception as e:
     VISION_AVAILABLE = False
     print(f"❌ Google Vision API initialization failed: {e}")
+    vision_client = None
 
 # Google Translate APIのインポートとエラーハンドリング
 try:
@@ -506,58 +507,163 @@ async def stage1_ocr(image_path: str, session_id: str = None) -> dict:
     """Stage 1: Google Vision APIを使って画像からテキストを抽出"""
     print("🔍 Stage 1: Starting OCR...")
     
+    # Vision API利用可能性チェック
     if not VISION_AVAILABLE:
+        error_message = "Google Vision APIが利用できません。管理者に問い合わせてください。"
+        detailed_error = {
+            "error_type": "api_unavailable",
+            "service": "Google Vision API",
+            "troubleshooting": [
+                "GOOGLE_CREDENTIALS_JSON環境変数が設定されているか確認してください",
+                "Google Cloud Vision APIが有効化されているか確認してください",
+                "サービスアカウントキーが正しく設定されているか確認してください"
+            ]
+        }
+        
         error_result = {
             "stage": 1,
             "success": False,
-            "error": "Google Vision API not available",
+            "error": error_message,
+            "detailed_error": detailed_error,
             "extracted_text": ""
         }
+        
         if session_id:
-            await send_progress(session_id, 1, "error", "Google Vision API not available")
+            await send_progress(session_id, 1, "error", error_message, detailed_error)
+        return error_result
+    
+    # 画像ファイル存在チェック
+    if not os.path.exists(image_path):
+        error_message = "画像ファイルが見つかりません"
+        error_result = {
+            "stage": 1,
+            "success": False,
+            "error": error_message,
+            "detailed_error": {"error_type": "file_not_found", "file_path": image_path},
+            "extracted_text": ""
+        }
+        
+        if session_id:
+            await send_progress(session_id, 1, "error", error_message)
         return error_result
     
     try:
+        # 画像ファイル読み込み
         with io.open(image_path, 'rb') as image_file:
             content = image_file.read()
 
+        # ファイルサイズチェック
+        if len(content) == 0:
+            raise Exception("画像ファイルが空です")
+        
+        if len(content) > 20 * 1024 * 1024:  # 20MB制限
+            raise Exception("画像ファイルが大きすぎます（20MB以下にしてください）")
+
+        # Vision API呼び出し
         image = vision.Image(content=content)
         response = vision_client.text_detection(image=image)
         
+        # エラーレスポンスチェック
         if response.error.message:
             raise Exception(f'Vision API Error: {response.error.message}')
         
+        # テキスト抽出
         texts = response.text_annotations
         extracted_text = texts[0].description if texts else ""
         
         print(f"✅ Stage 1 Complete: Extracted {len(extracted_text)} characters")
         
+        # 結果が空の場合の処理
+        if not extracted_text.strip():
+            warning_message = "画像からテキストを検出できませんでした。より鮮明な画像をお試しください。"
+            result = {
+                "stage": 1,
+                "success": False,
+                "error": warning_message,
+                "detailed_error": {
+                    "error_type": "no_text_detected",
+                    "suggestions": [
+                        "より鮮明な画像を使用してください",
+                        "文字が大きく写っている画像を選んでください",
+                        "照明が良い環境で撮影した画像を使用してください",
+                        "メニューテキストが中央に写っている画像を選んでください"
+                    ]
+                },
+                "extracted_text": ""
+            }
+            
+            if session_id:
+                await send_progress(session_id, 1, "error", warning_message, result["detailed_error"])
+            
+            return result
+        
+        # 成功結果
         result = {
             "stage": 1,
             "success": True,
             "extracted_text": extracted_text,
-            "total_detections": len(texts)
+            "total_detections": len(texts),
+            "file_size": len(content),
+            "text_length": len(extracted_text)
         }
         
         if session_id:
             await send_progress(session_id, 1, "completed", "OCR完了", {
                 "extracted_text": extracted_text,
-                "total_detections": len(texts)
+                "total_detections": len(texts),
+                "text_preview": extracted_text[:100] + "..." if len(extracted_text) > 100 else extracted_text
             })
         
         return result
             
     except Exception as e:
         print(f"❌ Stage 1 Failed: {e}")
+        
+        # エラータイプの判定
+        error_type = "unknown_error"
+        suggestions = []
+        
+        if "permission" in str(e).lower() or "forbidden" in str(e).lower():
+            error_type = "permission_error"
+            suggestions = [
+                "Google Cloud認証が正しく設定されているか確認してください",
+                "サービスアカウントにVision API権限があるか確認してください"
+            ]
+        elif "quota" in str(e).lower() or "limit" in str(e).lower():
+            error_type = "quota_exceeded"
+            suggestions = [
+                "Vision APIクォータを確認してください",
+                "しばらく時間をおいてから再試行してください"
+            ]
+        elif "network" in str(e).lower() or "connection" in str(e).lower():
+            error_type = "network_error"
+            suggestions = [
+                "インターネット接続を確認してください",
+                "しばらく時間をおいてから再試行してください"
+            ]
+        else:
+            suggestions = [
+                "画像ファイルが破損していないか確認してください",
+                "サポートされている画像形式（JPG、PNG、GIF）を使用してください",
+                "しばらく時間をおいてから再試行してください"
+            ]
+        
+        detailed_error = {
+            "error_type": error_type,
+            "original_error": str(e),
+            "suggestions": suggestions
+        }
+        
         error_result = {
             "stage": 1,
             "success": False,
-            "error": str(e),
+            "error": f"OCR処理中にエラーが発生しました: {str(e)}",
+            "detailed_error": detailed_error,
             "extracted_text": ""
         }
         
         if session_id:
-            await send_progress(session_id, 1, "error", f"OCRエラー: {str(e)}")
+            await send_progress(session_id, 1, "error", f"OCRエラー: {str(e)}", detailed_error)
         
         return error_result
 
@@ -982,18 +1088,26 @@ async def stage4_add_descriptions(translated_data: dict, session_id: str = None)
                     else:
                         raise ValueError("No JSON found in response")
                     
-                    # 進捗更新
+                    # 進捗更新（リアルタイムストリーミング強化）
                     processed_items += len(chunk)
                     progress_percent = int((processed_items / total_items) * 100)
                     
                     if session_id:
+                        # 現在のチャンクで処理されたアイテム詳細
+                        newly_processed_items = new_items
+                        
                         await send_progress(
                             session_id, 4, "active", 
-                            f"🍽️ {category}: {progress_percent}% complete",
+                            f"🍽️ {category}: チャンク{chunk_number}/{total_chunks}完了 ({len(newly_processed_items)}アイテム追加)",
                             {
                                 "progress_percent": progress_percent,
-                                "partial_results": {category: category_results},
-                                "chunk_completed": f"{chunk_number}/{total_chunks}"
+                                "processing_category": category,
+                                "partial_results": {category: category_results},  # 累積結果
+                                "newly_processed_items": newly_processed_items,   # 新しく処理されたアイテム
+                                "chunk_completed": f"{chunk_number}/{total_chunks}",
+                                "chunk_size": len(chunk),
+                                "items_in_category": len(category_results),
+                                "streaming_update": True  # ストリーミング更新フラグ
                             }
                         )
                     
@@ -1017,15 +1131,18 @@ async def stage4_add_descriptions(translated_data: dict, session_id: str = None)
             
             final_menu[category] = category_results
             
-            # カテゴリ完了通知
+            # カテゴリ完了通知（ストリーミング強化）
             if session_id:
                 await send_progress(
                     session_id, 4, "active", 
-                    f"✅ Completed {category} ({len(category_results)} items)",
+                    f"✅ {category}カテゴリ完了！{len(category_results)}アイテムの詳細説明を追加しました",
                     {
                         "category_completed": category,
                         "category_items": len(category_results),
-                        "partial_menu": final_menu
+                        "partial_menu": final_menu,  # 全体の累積結果
+                        "completed_category_items": category_results,  # 完了したカテゴリのアイテム詳細
+                        "category_completion": True,  # カテゴリ完了フラグ
+                        "remaining_categories": [cat for cat in translated_data.keys() if cat not in final_menu]
                     }
                 )
             
@@ -2051,9 +2168,20 @@ async def process_menu_background(session_id: str, file_path: str):
         if not stage3_result["success"]:
             await send_progress(session_id, 3, "error", f"翻訳エラー: {stage3_result['error']}")
             return
+        
+        # Stage3完了時に詳細な翻訳結果を送信（フロントエンド表示用）
+        translated_summary = {}
+        total_translated_items = 0
+        for category, items in stage3_result["translated_categories"].items():
+            translated_summary[category] = len(items)
+            total_translated_items += len(items)
             
-        await send_progress(session_id, 3, "completed", "翻訳完了", {
-            "translated_categories": stage3_result["translated_categories"]
+        await send_progress(session_id, 3, "completed", "✅ 翻訳完了！英語メニューをご確認ください", {
+            "translated_categories": stage3_result["translated_categories"],
+            "translation_summary": translated_summary,
+            "total_translated_items": total_translated_items,
+            "translation_method": stage3_result.get("translation_method", "google_translate"),
+            "show_translated_menu": True  # フロントエンドに翻訳メニュー表示を指示
         })
         
         # Stage 4: 詳細説明追加（安定性強化版）
@@ -2292,6 +2420,42 @@ async def translate_menu(file: UploadFile = File(...)):
         if 'file_path' in locals() and os.path.exists(file_path):
             os.remove(file_path)
         raise HTTPException(status_code=500, detail=str(e))
+
+# 診断エンドポイントを追加
+@app.get("/diagnostic")
+async def diagnostic():
+    """システム診断情報を返す"""
+    diagnostic_info = {
+        "vision_api": {
+            "available": VISION_AVAILABLE,
+            "error": None if VISION_AVAILABLE else "Google Vision API not available"
+        },
+        "translate_api": {
+            "available": TRANSLATE_AVAILABLE,
+            "error": None if TRANSLATE_AVAILABLE else "Google Translate API not available"
+        },
+        "openai_api": {
+            "available": OPENAI_AVAILABLE,
+            "error": None if OPENAI_AVAILABLE else "OpenAI API not available"
+        },
+        "environment": {
+            "google_credentials_available": google_credentials is not None,
+            "google_credentials_json_env": "GOOGLE_CREDENTIALS_JSON" in os.environ,
+            "openai_api_key_env": "OPENAI_API_KEY" in os.environ
+        }
+    }
+    
+    # Google Vision APIのテスト
+    if VISION_AVAILABLE:
+        try:
+            # テスト用の小さな画像でAPIを確認
+            test_response = vision_client.text_detection(vision.Image(content=b''))
+            diagnostic_info["vision_api"]["test_status"] = "connection_ok"
+        except Exception as e:
+            diagnostic_info["vision_api"]["test_status"] = f"connection_failed: {str(e)}"
+            diagnostic_info["vision_api"]["available"] = False
+    
+    return JSONResponse(content=diagnostic_info)
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))  # Railway用のポート設定

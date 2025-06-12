@@ -214,4 +214,200 @@ python test_google_search.py --interactive
 
 ## 📜 ライセンス
 
-このプロジェクトはMITライセンスの下で公開されています。 
+このプロジェクトはMITライセンスの下で公開されています。
+
+## 🔧 Setup & Configuration
+
+### Google Vision API Setup (Stage 1 OCR Required)
+
+Stage1のOCR処理には**Google Vision API**が必要です：
+
+1. **Google Cloud Projectを作成**
+   ```bash
+   # Google Cloud CLIでプロジェクト作成
+   gcloud projects create your-project-id
+   gcloud config set project your-project-id
+   ```
+
+2. **Vision APIを有効化**
+   ```bash
+   gcloud services enable vision.googleapis.com
+   ```
+
+3. **サービスアカウント作成**
+   ```bash
+   gcloud iam service-accounts create menu-processor \
+       --display-name="Menu Processor Service Account"
+   ```
+
+4. **権限付与**
+   ```bash
+   gcloud projects add-iam-policy-binding your-project-id \
+       --member="serviceAccount:menu-processor@your-project-id.iam.gserviceaccount.com" \
+       --role="roles/vision.imageAnalyzer"
+   ```
+
+5. **認証キー生成**
+   ```bash
+   gcloud iam service-accounts keys create key.json \
+       --iam-account=menu-processor@your-project-id.iam.gserviceaccount.com
+   ```
+
+6. **環境変数設定**
+   ```bash
+   # .envファイルに追加
+   GOOGLE_CREDENTIALS_JSON='{"type":"service_account","project_id":"your-project-id",...}'
+   # または
+   GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
+   ```
+
+### OpenAI API Setup (Stage 2-4 Required)
+
+```bash
+# .envファイルに追加
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+### Google Translate API Setup (Stage 3 Optional - Fallback)
+
+```bash
+# Vision APIと同じ認証情報を使用
+gcloud services enable translate.googleapis.com
+```
+
+## 🚨 Stage 1 通信問題のトラブルシューティング
+
+### 症状：「急にホームページに戻される」「Try Again」
+
+**最も一般的な原因：**
+1. **Google Vision APIが正しく設定されていない**
+2. **認証情報が無効または期限切れ**
+3. **APIクォータが不足**
+
+### 診断方法
+
+1. **診断エンドポイントで確認**
+   ```bash
+   curl http://localhost:8000/diagnostic
+   ```
+
+2. **ログを確認**
+   ```bash
+   # バックエンド起動時のログを確認
+   python run_mvp.py
+   # ✅ Google Vision API client initialized successfully
+   # ❌ Google Vision API initialization failed: [エラー詳細]
+   ```
+
+3. **環境変数を確認**
+   ```bash
+   echo $GOOGLE_CREDENTIALS_JSON
+   echo $GOOGLE_APPLICATION_CREDENTIALS
+   ```
+
+### 一般的なエラーと解決策
+
+#### ❌ "Google Vision APIが利用できません"
+**原因：** 認証情報が設定されていない
+**解決策：**
+```bash
+# Google Cloud認証情報を確認
+gcloud auth application-default login
+# または環境変数を正しく設定
+export GOOGLE_CREDENTIALS_JSON='{"type":"service_account",...}'
+```
+
+#### ❌ "403 Forbidden" / "Permission denied"
+**原因：** サービスアカウントに権限がない
+**解決策：**
+```bash
+# Vision API権限を付与
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:YOUR_SERVICE_ACCOUNT@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/vision.imageAnalyzer"
+```
+
+#### ❌ "Quota exceeded"
+**原因：** APIクォータ不足
+**解決策：**
+1. Google Cloud Consoleでクォータを確認
+2. 必要に応じてクォータ増加を申請
+3. 別のプロジェクトを使用
+
+#### ❌ "画像からテキストを検出できませんでした"
+**原因：** 画像品質の問題
+**解決策：**
+- 明るく鮮明な画像を使用
+- メニューテキストが大きく写っている画像を選択
+- 手ブレを避ける
+
+## 📊 Health Check
+
+システム状態を確認：
+```bash
+curl http://localhost:8000/health
+```
+
+期待される正常レスポンス：
+```json
+{
+  "status": "healthy",
+  "services": {
+    "vision_api": true,
+    "translate_api": true,
+    "openai_api": true
+  }
+}
+```
+
+## 🔄 Development Setup
+
+```bash
+# 仮想環境作成
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 依存関係インストール
+pip install -r requirements.txt
+
+# 環境変数設定
+cp env_example.txt .env
+# .envファイルを編集して実際のAPIキーを設定
+
+# 開発サーバー起動
+python run_mvp.py
+```
+
+## 🚀 Production Deployment
+
+### Railway Deployment
+```bash
+# 環境変数設定（Railway Dashboard）
+GOOGLE_CREDENTIALS_JSON={"type":"service_account",...}
+OPENAI_API_KEY=your_key_here
+PORT=8000
+```
+
+### Heroku Deployment
+```bash
+heroku config:set GOOGLE_CREDENTIALS_JSON='{"type":"service_account",...}'
+heroku config:set OPENAI_API_KEY=your_key_here
+```
+
+## 🐛 Debug Mode
+
+フロントエンドでDebug Modeを有効化すると：
+- リアルタイム通信ログ
+- Stage別の詳細進捗
+- Ping/Pong接続状態
+- エラー詳細情報
+
+が表示されます。
+
+## 📞 Support
+
+問題が解決しない場合：
+1. 診断エンドポイント結果を確認
+2. ブラウザコンソール（F12）のエラーログを確認
+3. バックエンドのログを確認
+4. GitHub Issueで報告 
