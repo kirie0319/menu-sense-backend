@@ -40,11 +40,10 @@ if google_credentials_json:
         import json
         from google.oauth2 import service_account
         
-        # 改行文字やエスケープシーケンスを正規化
-        credentials_json_cleaned = google_credentials_json.replace('\\n', '\n').replace('\\"', '"')
+        # 改行文字やエスケープシーケンスを正規
         
         # JSON文字列をパース
-        credentials_info = json.loads(credentials_json_cleaned)
+        credentials_info = json.loads(google_credentials_json)
         google_credentials = service_account.Credentials.from_service_account_info(credentials_info)
         print("✅ Google Cloud credentials loaded from environment variable")
     except json.JSONDecodeError as e:
