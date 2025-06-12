@@ -1,0 +1,4 @@
+OPENAI_API_KEY=your_openai_api_key_here
+GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account-key.json
+GOOGLE_SEARCH_API_KEY=your_google_search_api_key_here
+GOOGLE_SEARCH_ENGINE_ID=your_custom_search_engine_id_here 

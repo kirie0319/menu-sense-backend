@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pillow
+openai
+python-dotenv
+pydantic
+aiofiles
+google-cloud-vision
+google-api-python-client
+google-cloud-translate
