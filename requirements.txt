@@ -6,6 +6,14 @@ openai
 python-dotenv
 pydantic
 aiofiles
-google-cloud-vision
-google-api-python-client
-google-cloud-translate
+
+google-cloud-vision==3.10.0
+google-cloud-translate==3.15.2
+google-api-python-client==2.107.0
+google-generativeai==0.5.2
+
+# 共通依存の安定バージョンをロック
+google-auth==2.26.0
+proto-plus==1.26.1
+protobuf==4.25.3
+google-api-core==2.18.0

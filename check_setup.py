@@ -18,7 +18,8 @@ def check_environment():
     checks = {
         "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
         "GOOGLE_CREDENTIALS_JSON": os.getenv("GOOGLE_CREDENTIALS_JSON"),
-        "GOOGLE_APPLICATION_CREDENTIALS": os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        "GOOGLE_APPLICATION_CREDENTIALS": os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+        "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY")
     }
     
     for key, value in checks.items():
@@ -89,6 +90,33 @@ def check_openai():
         print("❌ openai: 未インストール")
         return False
 
+def check_gemini():
+    """Gemini APIをチェック"""
+    print("\n🔍 Gemini API チェック...")
+    
+    try:
+        import google.generativeai as genai
+        print("✅ google-generativeai: インストール済み")
+        
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            try:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                print("✅ Gemini API: モデル初期化成功 (gemini-2.0-flash-exp)")
+                return True
+            except Exception as e:
+                print(f"❌ Gemini API: 初期化失敗 - {e}")
+                return False
+        else:
+            print("❌ Gemini API: APIキーが未設定")
+            return False
+            
+    except ImportError:
+        print("❌ google-generativeai: 未インストール")
+        print("   インストール: pip install google-generativeai")
+        return False
+
 def check_dependencies():
     """依存関係をチェック"""
     print("\n🔍 依存関係チェック...")
@@ -100,6 +128,7 @@ def check_dependencies():
         'aiofiles',
         'google-cloud-vision',
         'google-cloud-translate',
+        'google-generativeai',
         'openai'
     ]
     
@@ -157,10 +186,15 @@ def provide_solutions():
     print("   - OpenAI APIキーを取得")
     print("   - OPENAI_API_KEY環境変数に設定")
     
-    print("\n3. 依存関係のインストール:")
+    print("\n3. Gemini APIの設定:")
+    print("   - Google AI Studio (https://aistudio.google.com) でAPIキーを取得")
+    print("   - GEMINI_API_KEY環境変数に設定")
+    print("   - pip install google-generativeai")
+    
+    print("\n4. 依存関係のインストール:")
     print("   pip install -r requirements.txt")
     
-    print("\n4. 環境変数の設定:")
+    print("\n5. 環境変数の設定:")
     print("   - .envファイルを作成")
     print("   - env_example.txtを参考に必要な変数を設定")
 
@@ -182,9 +216,10 @@ def main():
     if deps_ok:
         gcp_ok = check_google_cloud()
         openai_ok = check_openai()
-        all_good &= gcp_ok and openai_ok
+        gemini_ok = check_gemini()
+        all_good &= gcp_ok and openai_ok and gemini_ok
         
-        if gcp_ok and openai_ok:
+        if gcp_ok and openai_ok and gemini_ok:
             test_apis()
     
     print("\n" + "=" * 50)

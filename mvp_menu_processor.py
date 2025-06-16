@@ -118,6 +118,32 @@ except Exception as e:
     openai_client = None
     print(f"❌ OpenAI API initialization failed: {e}")
 
+# Gemini APIの設定
+try:
+    import google.generativeai as genai
+    import base64
+    
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    GEMINI_AVAILABLE = bool(gemini_api_key)
+    
+    if GEMINI_AVAILABLE:
+        genai.configure(api_key=gemini_api_key)
+        # Gemini 2.0 Flash modelを使用
+        gemini_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        print("✅ Gemini 2.0 Flash API configured successfully")
+    else:
+        gemini_model = None
+        print("⚠️ GEMINI_API_KEY not found in environment variables")
+    
+except ImportError:
+    GEMINI_AVAILABLE = False
+    gemini_model = None
+    print("❌ google-generativeai package not installed. Install with: pip install google-generativeai")
+except Exception as e:
+    GEMINI_AVAILABLE = False
+    gemini_model = None
+    print(f"❌ Gemini API initialization failed: {e}")
+
 # Function calling用のスキーマ定義
 CATEGORIZE_FUNCTION = {
     "name": "categorize_menu_items",
@@ -673,6 +699,212 @@ async def stage1_ocr(image_path: str, session_id: str = None) -> dict:
         
         return error_result
 
+# Stage 1: OCR with Gemini 2.0 Flash - 高精度版
+async def stage1_ocr_gemini(image_path: str, session_id: str = None) -> dict:
+    """Stage 1: Gemini 2.0 Flashを使って画像からテキストを抽出（高精度版）"""
+    print("🔍 Stage 1: Starting OCR with Gemini 2.0 Flash...")
+    
+    # Gemini API利用可能性チェック
+    if not GEMINI_AVAILABLE or not gemini_model:
+        error_message = "Gemini APIが利用できません。GEMINI_API_KEYが設定されているか確認してください。"
+        detailed_error = {
+            "error_type": "api_unavailable",
+            "service": "Gemini 2.0 Flash API",
+            "troubleshooting": [
+                "GEMINI_API_KEY環境変数が設定されているか確認してください",
+                "google-generativeaiパッケージがインストールされているか確認してください",
+                "Gemini APIが有効化されているか確認してください"
+            ]
+        }
+        
+        error_result = {
+            "stage": 1,
+            "success": False,
+            "error": error_message,
+            "detailed_error": detailed_error,
+            "extracted_text": ""
+        }
+        
+        if session_id:
+            await send_progress(session_id, 1, "error", error_message, detailed_error)
+        return error_result
+    
+    # 画像ファイル存在チェック
+    if not os.path.exists(image_path):
+        error_message = "画像ファイルが見つかりません"
+        error_result = {
+            "stage": 1,
+            "success": False,
+            "error": error_message,
+            "detailed_error": {"error_type": "file_not_found", "file_path": image_path},
+            "extracted_text": ""
+        }
+        
+        if session_id:
+            await send_progress(session_id, 1, "error", error_message)
+        return error_result
+    
+    try:
+        # 画像ファイル読み込み
+        with open(image_path, 'rb') as image_file:
+            image_data = image_file.read()
+
+        # ファイルサイズチェック
+        if len(image_data) == 0:
+            raise Exception("画像ファイルが空です")
+        
+        if len(image_data) > 20 * 1024 * 1024:  # 20MB制限
+            raise Exception("画像ファイルが大きすぎます（20MB以下にしてください）")
+
+        # 画像をbase64エンコード
+        import base64
+        import mimetypes
+        
+        # ファイルタイプの検出
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if not mime_type or not mime_type.startswith('image/'):
+            mime_type = 'image/jpeg'  # デフォルト
+        
+        # Gemini用の画像データ準備
+        image_parts = [
+            {
+                "mime_type": mime_type,
+                "data": image_data
+            }
+        ]
+
+        # メニュー画像OCR用のプロンプト（飲食店特化）
+        prompt = """
+この画像は日本の飲食店のメニューです。以下の要件に従ってテキストを抽出してください：
+
+1. 料理名、価格、説明を正確に読み取る
+2. メニューの視覚的構造（セクション、カテゴリ）を保持する
+3. 「ドリンク」「メイン」「前菜」「デザート」などの基本カテゴリを推測して分類
+4. 文字が不鮮明な場合は可能な限り推測
+5. 価格表記（円、¥など）を正確に抽出
+6. テキストの読み取り順序を視覚的な配置に合わせる
+
+抽出形式:
+- カテゴリごとに整理
+- 各料理について： 料理名 価格（ある場合）
+- セクション間に空行を入れる
+- 推測したカテゴリ名は [カテゴリ名] の形式で記載
+
+画像から読み取れる全てのテキストを丁寧に抽出してください。
+        """
+
+        # Gemini APIに画像とプロンプトを送信
+        response = gemini_model.generate_content([prompt] + image_parts)
+        
+        # レスポンスからテキストを抽出
+        if response.text:
+            extracted_text = response.text.strip()
+        else:
+            extracted_text = ""
+        
+        print(f"✅ Stage 1 (Gemini) Complete: Extracted {len(extracted_text)} characters")
+        
+        # 結果が空の場合の処理
+        if not extracted_text.strip():
+            warning_message = "画像からテキストを検出できませんでした。より鮮明な画像をお試しください。"
+            result = {
+                "stage": 1,
+                "success": False,
+                "error": warning_message,
+                "detailed_error": {
+                    "error_type": "no_text_detected",
+                    "suggestions": [
+                        "より鮮明な画像を使用してください",
+                        "文字が大きく写っている画像を選んでください",
+                        "照明が良い環境で撮影した画像を使用してください",
+                        "メニューテキストが中央に写っている画像を選んでください"
+                    ]
+                },
+                "extracted_text": ""
+            }
+            
+            if session_id:
+                await send_progress(session_id, 1, "error", warning_message, result["detailed_error"])
+            
+            return result
+        
+        # 成功結果
+        result = {
+            "stage": 1,
+            "success": True,
+            "extracted_text": extracted_text,
+            "file_size": len(image_data),
+            "text_length": len(extracted_text),
+            "ocr_method": "gemini_2.0_flash"
+        }
+        
+        if session_id:
+            await send_progress(session_id, 1, "completed", "OCR完了 (Gemini 2.0 Flash)", {
+                "extracted_text": extracted_text,
+                "text_preview": extracted_text[:100] + "..." if len(extracted_text) > 100 else extracted_text,
+                "ocr_method": "gemini_2.0_flash"
+            })
+        
+        return result
+            
+    except Exception as e:
+        print(f"❌ Stage 1 (Gemini) Failed: {e}")
+        
+        # エラータイプの判定
+        error_type = "unknown_error"
+        suggestions = []
+        
+        if "api" in str(e).lower() and "key" in str(e).lower():
+            error_type = "api_key_error"
+            suggestions = [
+                "GEMINI_API_KEYが正しく設定されているか確認してください",
+                "Gemini APIキーが有効であることを確認してください"
+            ]
+        elif "quota" in str(e).lower() or "limit" in str(e).lower():
+            error_type = "quota_exceeded"
+            suggestions = [
+                "Gemini APIクォータを確認してください",
+                "しばらく時間をおいてから再試行してください"
+            ]
+        elif "permission" in str(e).lower() or "forbidden" in str(e).lower():
+            error_type = "permission_error"
+            suggestions = [
+                "Gemini API権限を確認してください",
+                "APIキーが正しく設定されているか確認してください"
+            ]
+        elif "network" in str(e).lower() or "connection" in str(e).lower():
+            error_type = "network_error"
+            suggestions = [
+                "インターネット接続を確認してください",
+                "しばらく時間をおいてから再試行してください"
+            ]
+        else:
+            suggestions = [
+                "画像ファイルが破損していないか確認してください",
+                "サポートされている画像形式（JPG、PNG、GIF、WEBP）を使用してください",
+                "しばらく時間をおいてから再試行してください"
+            ]
+        
+        detailed_error = {
+            "error_type": error_type,
+            "original_error": str(e),
+            "suggestions": suggestions,
+            "ocr_method": "gemini_2.0_flash"
+        }
+        
+        error_result = {
+            "stage": 1,
+            "success": False,
+            "error": f"Gemini OCR処理中にエラーが発生しました: {str(e)}",
+            "detailed_error": detailed_error,
+            "extracted_text": ""
+        }
+        
+        if session_id:
+            await send_progress(session_id, 1, "error", f"Gemini OCRエラー: {str(e)}", detailed_error)
+        
+        return error_result
+
 # Stage 2: 日本語のままカテゴリ分類・枠組み作成 (Function Calling版)
 async def stage2_categorize(extracted_text: str, session_id: str = None) -> dict:
     """Stage 2: Function Callingを使って抽出されたテキストを日本語のままカテゴリ分類"""
@@ -1179,6 +1411,7 @@ async def read_root():
     vision_status = "✅ Ready" if VISION_AVAILABLE else "❌ Not Configured"
     translate_status = "✅ Ready" if TRANSLATE_AVAILABLE else "❌ Not Configured"
     openai_status = "✅ Ready" if OPENAI_AVAILABLE else "❌ Not Configured"
+    gemini_status = "✅ Ready (Gemini 2.0 Flash)" if GEMINI_AVAILABLE else "❌ Not Configured"
     
     html_content = f"""
     <!DOCTYPE html>
@@ -1232,7 +1465,7 @@ async def read_root():
             }}
             .status-grid {{
                 display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
+                grid-template-columns: repeat(2, 1fr);
                 gap: 20px;
                 margin-bottom: 40px;
             }}
@@ -1244,13 +1477,10 @@ async def read_root():
                 }}
             }}
             
-            @media (max-width: 1024px) and (min-width: 769px) {{
+            @media (min-width: 1200px) {{
                 .status-grid {{
-                    grid-template-columns: 1fr 1fr;
-                    gap: 15px;
-                }}
-                .status-grid .status-card:last-child {{
-                    grid-column: span 2;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 20px;
                 }}
             }}
             .status-card {{
@@ -1595,10 +1825,15 @@ async def read_root():
             </div>
             
             <div class="status-grid">
+                <div class="status-card {'ready' if GEMINI_AVAILABLE else 'error'}">
+                    <strong>🎯 Gemini 2.0 Flash</strong><br>
+                    {gemini_status}
+                    {'<div class="success-badge">High-Precision OCR</div>' if GEMINI_AVAILABLE else ''}
+                </div>
                 <div class="status-card {'ready' if VISION_AVAILABLE else 'error'}">
                     <strong>🔍 Google Vision API</strong><br>
                     {vision_status}
-                    {'<div class="success-badge">OCR Ready</div>' if VISION_AVAILABLE else ''}
+                    {'<div class="success-badge">OCR Fallback</div>' if VISION_AVAILABLE else ''}
                 </div>
                 <div class="status-card {'ready' if TRANSLATE_AVAILABLE else 'error'}">
                     <strong>🌍 Google Translate API</strong><br>
@@ -2147,9 +2382,20 @@ async def process_menu_start(file: UploadFile = File(...)):
 async def process_menu_background(session_id: str, file_path: str):
     """バックグラウンドでメニュー処理を実行"""
     try:
-        # Stage 1: OCR
+        # Stage 1: OCR with Gemini 2.0 Flash (優先) / Google Vision API (フォールバック)
         await send_progress(session_id, 1, "active", "画像からテキストを抽出中...")
-        stage1_result = await stage1_ocr(file_path, session_id)
+        
+        # Gemini 2.0 Flashを優先して使用
+        if GEMINI_AVAILABLE:
+            stage1_result = await stage1_ocr_gemini(file_path, session_id)
+            # Geminiで失敗した場合はGoogle Vision APIをフォールバック
+            if not stage1_result["success"] and VISION_AVAILABLE:
+                print("⚠️ Gemini OCR failed, falling back to Google Vision API...")
+                await send_progress(session_id, 1, "active", "Gemini OCRが失敗したため、Google Vision APIで再試行中...")
+                stage1_result = await stage1_ocr(file_path, session_id)
+        else:
+            # Geminiが利用できない場合はGoogle Vision APIを使用
+            stage1_result = await stage1_ocr(file_path, session_id)
         
         if not stage1_result["success"]:
             await send_progress(session_id, 1, "error", f"OCRエラー: {stage1_result['error']}")
@@ -2346,8 +2592,13 @@ async def health_check():
     else:
         services_detail["openai_api"] = {"status": "unavailable", "reason": "missing_api_key"}
     
+    if GEMINI_AVAILABLE:
+        services_detail["gemini_api"] = {"status": "available", "model": "gemini-2.0-flash-exp"}
+    else:
+        services_detail["gemini_api"] = {"status": "unavailable", "reason": "missing_api_key_or_package"}
+    
     # アプリケーション全体の状態
-    overall_status = "healthy" if any([VISION_AVAILABLE, TRANSLATE_AVAILABLE, OPENAI_AVAILABLE]) else "degraded"
+    overall_status = "healthy" if any([GEMINI_AVAILABLE, VISION_AVAILABLE, TRANSLATE_AVAILABLE, OPENAI_AVAILABLE]) else "degraded"
     
     return {
         "status": overall_status,
@@ -2360,7 +2611,8 @@ async def health_check():
         "services": {
             "vision_api": VISION_AVAILABLE,
             "translate_api": TRANSLATE_AVAILABLE,
-            "openai_api": OPENAI_AVAILABLE
+            "openai_api": OPENAI_AVAILABLE,
+            "gemini_api": GEMINI_AVAILABLE
         },
         "services_detail": services_detail,
         "ping_pong_sessions": len(ping_pong_sessions)
@@ -2381,8 +2633,16 @@ async def translate_menu(file: UploadFile = File(...)):
             content = await file.read()
             await f.write(content)
         
-        # Stage 1: OCR
-        stage1_result = await stage1_ocr(file_path)
+        # Stage 1: OCR with Gemini 2.0 Flash (優先) / Google Vision API (フォールバック)
+        if GEMINI_AVAILABLE:
+            stage1_result = await stage1_ocr_gemini(file_path)
+            # Geminiで失敗した場合はGoogle Vision APIをフォールバック
+            if not stage1_result["success"] and VISION_AVAILABLE:
+                print("⚠️ Gemini OCR failed, falling back to Google Vision API...")
+                stage1_result = await stage1_ocr(file_path)
+        else:
+            # Geminiが利用できない場合はGoogle Vision APIを使用
+            stage1_result = await stage1_ocr(file_path)
         
         if not stage1_result["success"]:
             raise HTTPException(status_code=500, detail=f"Text extraction error: {stage1_result['error']}")

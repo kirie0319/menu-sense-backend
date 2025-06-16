@@ -9,7 +9,7 @@
 ## 🔧 主な機能
 
 ### 4段階処理システム
-1. **Stage 1: OCR** - Google Vision APIによる文字認識
+1. **Stage 1: OCR** - Gemini 2.0 Flash APIによる高精度文字認識（Google Vision APIフォールバック）
 2. **Stage 2: カテゴリ分類** - OpenAI Function Callingによる日本語構造化
 3. **Stage 3: 翻訳** - OpenAI Function Callingによる英語翻訳
 4. **Stage 4: 詳細説明** - 外国人観光客向け詳細説明追加
@@ -47,6 +47,9 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 # Google Vision API
 GOOGLE_APPLICATION_CREDENTIALS=path/to/your/google-credentials.json
+
+# Gemini API
+GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ### 4. Google Cloud認証の設定
