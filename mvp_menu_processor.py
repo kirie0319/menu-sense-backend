@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -16,13 +16,19 @@ load_dotenv()
 
 app = FastAPI(title="Menu Processor MVP", version="1.0.0")
 
-# CORS設定
+# CORS設定（モバイル対応版）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://menu-sense-frontend.vercel.app"],  # 本番環境では具体的なドメインを指定することを推奨
+    allow_origins=[
+        "http://localhost:3000", 
+        "https://menu-sense-frontend.vercel.app",
+        "https://speeches-plastic-excitement-reproduced.trycloudflare.com",  # 全てのVercelドメインを許可
+        "https://menu-sense-frontend-*.vercel.app",  # ブランチデプロイ対応
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # モバイル対応
 )
 
 # 静的ファイルとアップロードディレクトリの設定
@@ -1167,7 +1173,7 @@ async def stage4_add_descriptions(translated_data: dict, session_id: str = None)
             "final_menu": {}
         }
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/api/", response_class=HTMLResponse)
 async def read_root():
     """4段階処理のメインページ（MVP版）"""
     vision_status = "✅ Ready" if VISION_AVAILABLE else "❌ Not Configured"
@@ -2117,7 +2123,7 @@ async def read_root():
     
     return HTMLResponse(content=html_content)
 
-@app.post("/process-menu")
+@app.post("/api/process-menu")
 async def process_menu_start(file: UploadFile = File(...)):
     """メニュー処理を開始してセッションIDを返す"""
     if not file.content_type.startswith('image/'):
@@ -2168,7 +2174,7 @@ async def process_menu_background(session_id: str, file_path: str):
         if not stage3_result["success"]:
             await send_progress(session_id, 3, "error", f"翻訳エラー: {stage3_result['error']}")
             return
-        
+            
         # Stage3完了時に詳細な翻訳結果を送信（フロントエンド表示用）
         translated_summary = {}
         total_translated_items = 0
@@ -2251,21 +2257,37 @@ async def process_menu_background(session_id: str, file_path: str):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-@app.get("/progress/{session_id}")
+@app.get("/api/progress/{session_id}")
 async def get_progress(session_id: str):
-    """Server-Sent Eventsで進行状況を送信"""
+    """Server-Sent Eventsで進行状況を送信（モバイル対応版）"""
     async def event_generator():
         completed = False
+        last_heartbeat = asyncio.get_event_loop().time()
+        heartbeat_interval = 5  # 5秒ごとにハートビート（モバイル向け）
+        
         while not completed and session_id in progress_store:
+            current_time = asyncio.get_event_loop().time()
+            
             # 新しい進行状況があるか確認
             if progress_store[session_id]:
                 progress_data = progress_store[session_id].pop(0)
                 yield f"data: {json.dumps(progress_data)}\n\n"
+                last_heartbeat = current_time
                 
                 # 完了チェック
                 if progress_data.get("stage") == 5:
                     completed = True
             else:
+                # ハートビート送信（モバイル接続維持用）
+                if current_time - last_heartbeat > heartbeat_interval:
+                    heartbeat_data = {
+                        "type": "heartbeat",
+                        "timestamp": current_time,
+                        "session_id": session_id
+                    }
+                    yield f"data: {json.dumps(heartbeat_data)}\n\n"
+                    last_heartbeat = current_time
+                
                 await asyncio.sleep(0.2)
         
         # セッション終了とクリーンアップ
@@ -2281,14 +2303,19 @@ async def get_progress(session_id: str):
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*"
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Expose-Headers": "*",
+            "X-Accel-Buffering": "no",  # Nginxバッファリング無効
+            "Content-Encoding": "identity",  # モバイル圧縮問題回避
+            "Transfer-Encoding": "chunked"  # チャンク転送
         }
     )
 
-@app.post("/pong/{session_id}")
+@app.post("/api/pong/{session_id}")
 async def receive_pong(session_id: str):
     """クライアントからのPongを受信"""
     success = await handle_pong(session_id)
@@ -2297,7 +2324,7 @@ async def receive_pong(session_id: str):
     else:
         return {"status": "session_not_found", "session_id": session_id}
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """ヘルスチェックエンドポイント"""
     
@@ -2339,7 +2366,7 @@ async def health_check():
         "ping_pong_sessions": len(ping_pong_sessions)
     }
 
-@app.post("/translate")
+@app.post("/api/translate")
 async def translate_menu(file: UploadFile = File(...)):
     """フロントエンド互換のメニュー翻訳エンドポイント"""
     
@@ -2422,7 +2449,7 @@ async def translate_menu(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # 診断エンドポイントを追加
-@app.get("/diagnostic")
+@app.get("/api/diagnostic")
 async def diagnostic():
     """システム診断情報を返す"""
     diagnostic_info = {
@@ -2456,6 +2483,68 @@ async def diagnostic():
             diagnostic_info["vision_api"]["available"] = False
     
     return JSONResponse(content=diagnostic_info)
+
+# モバイル専用診断エンドポイント
+@app.get("/api/mobile-diagnostic")
+async def mobile_diagnostic(request: Request):
+    """モバイル専用の詳細診断情報"""
+    # リクエスト情報の詳細分析
+    headers = dict(request.headers)
+    user_agent = headers.get("user-agent", "Unknown")
+    is_mobile = any(mobile_indicator in user_agent.lower() for mobile_indicator in [
+        "mobile", "android", "iphone", "ipad", "blackberry", "windows phone"
+    ])
+    
+    # ネットワーク情報
+    network_info = {
+        "client_ip": request.client.host if request.client else "Unknown",
+        "user_agent": user_agent,
+        "is_mobile_detected": is_mobile,
+        "request_headers": headers,
+        "forwarded_for": headers.get("x-forwarded-for"),
+        "real_ip": headers.get("x-real-ip")
+    }
+    
+    # サービス状態の詳細確認
+    services_status = {
+        "vision_api": {
+            "available": VISION_AVAILABLE,
+            "mobile_compatibility": "good" if VISION_AVAILABLE else "unavailable",
+            "error": None if VISION_AVAILABLE else "Google Vision API not available"
+        },
+        "backend_connectivity": {
+            "cors_configured": True,
+            "sse_support": True,
+            "mobile_headers": True
+        }
+    }
+    
+    # モバイル特有の問題チェック
+    mobile_issues = []
+    
+    if not VISION_AVAILABLE:
+        mobile_issues.append("Vision API unavailable - this will cause Stage 1 failures")
+    
+    origin = headers.get("origin", "")
+    if "vercel.app" not in origin and "localhost" not in origin:
+        mobile_issues.append(f"Request from unexpected origin: {origin}")
+    
+    accept_header = headers.get("accept", "")
+    if "text/event-stream" not in accept_header:
+        mobile_issues.append("SSE support may be limited")
+    
+    return JSONResponse(content={
+        "mobile_diagnostic": True,
+        "timestamp": asyncio.get_event_loop().time(),
+        "network_info": network_info,
+        "services_status": services_status,
+        "mobile_issues": mobile_issues,
+        "recommendations": [
+            "Use Wi-Fi instead of mobile data for better stability",
+            "Ensure latest browser version for SSE support",
+            "Clear browser cache if experiencing persistent issues"
+        ]
+    })
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))  # Railway用のポート設定

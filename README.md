@@ -214,7 +214,7 @@ python test_google_search.py --interactive
 
 ## 📜 ライセンス
 
-このプロジェクトはMITライセンスの下で公開されています。
+このプロジェクトはMITライセンスの下で公開されています。 
 
 ## 🔧 Setup & Configuration
 
