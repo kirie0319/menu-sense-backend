@@ -270,7 +270,10 @@ class OpenAITranslationService(BaseTranslationService):
                             "translatedCategories": translated_categories,
                             "fallback_success": True,
                             "total_items": total_items,
-                            "total_categories": len(translated_categories)
+                            "total_categories": len(translated_categories),
+                            "translation_method": "openai_fallback",
+                            "show_translated_menu": True,  # UIにメニュー表示を指示
+                            "completion_status": "success"
                         }
                     )
                 

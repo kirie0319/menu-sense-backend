@@ -12,4 +12,13 @@ GOOGLE_CLOUD_PROJECT_ID=your_google_cloud_project_id
 
 GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account-key.json
 GOOGLE_SEARCH_API_KEY=your_google_search_api_key_here
-GOOGLE_SEARCH_ENGINE_ID=your_custom_search_engine_id_here 
+GOOGLE_SEARCH_ENGINE_ID=your_custom_search_engine_id_here
+
+# 並列処理設定（オプション）
+CONCURRENT_CHUNK_LIMIT=5  # 詳細説明同時実行チャンク数（デフォルト: 5）
+ENABLE_CATEGORY_PARALLEL=false  # 詳細説明カテゴリレベル並列処理（デフォルト: false）
+
+# 画像生成並列処理設定（オプション）
+IMAGE_CONCURRENT_CHUNK_LIMIT=3  # 画像生成同時実行チャンク数（デフォルト: 3）
+ENABLE_IMAGE_CATEGORY_PARALLEL=false  # 画像生成カテゴリレベル並列処理（デフォルト: false）
+IMAGE_PROCESSING_CHUNK_SIZE=3  # 画像生成チャンクサイズ（デフォルト: 3） 

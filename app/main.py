@@ -4,12 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import aiofiles
-import io
 import json
 import asyncio
-import uuid
-from datetime import datetime
-from typing import Dict, AsyncGenerator
 
 # 設定のインポート
 from app.core.config import settings, check_api_availability, validate_settings
@@ -407,14 +403,14 @@ async def stage1_ocr_gemini_exclusive(image_path: str, session_id: str = None) -
                 "file_size": result.metadata.get("file_size", 0)
             })
             
-            # 進行状況通知
-            if session_id:
-                await send_progress(session_id, 1, "completed", "🎯 Gemini OCR完了", {
-                    "extracted_text": result.extracted_text,
-                    "text_preview": result.extracted_text[:100] + "..." if len(result.extracted_text) > 100 else result.extracted_text,
-                    "ocr_service": "Gemini 2.0 Flash",
-                    "ocr_engine": "gemini-2.0-flash"
-                })
+            # 進行状況通知は process_menu_background で統一管理
+            # if session_id:
+            #     await send_progress(session_id, 1, "completed", "🎯 Gemini OCR完了", {
+            #         "extracted_text": result.extracted_text,
+            #         "text_preview": result.extracted_text[:100] + "..." if len(result.extracted_text) > 100 else result.extracted_text,
+            #         "ocr_service": "Gemini 2.0 Flash",
+            #         "ocr_engine": "gemini-2.0-flash"
+            #     })
         else:
             # エラー時の詳細情報を追加
             legacy_result.update({
@@ -487,14 +483,14 @@ async def stage2_categorize_openai_exclusive(extracted_text: str, session_id: st
                 "categorization_service": "OpenAI Function Calling"
             })
             
-            # 進行状況通知
-            if session_id:
-                await send_progress(session_id, 2, "completed", "🏷️ OpenAI カテゴリ分類完了", {
-                    "categories": result.categories,
-                    "uncategorized": result.uncategorized,
-                    "total_items": total_items,
-                    "categorization_engine": "openai-function-calling"
-                })
+            # 進行状況通知は process_menu_background で統一管理
+            # if session_id:
+            #     await send_progress(session_id, 2, "completed", "🏷️ OpenAI カテゴリ分類完了", {
+            #         "categories": result.categories,
+            #         "uncategorized": result.uncategorized,
+            #         "total_items": total_items,
+            #         "categorization_engine": "openai-function-calling"
+            #     })
         else:
             # エラー時の詳細情報を追加
             legacy_result.update({
@@ -562,14 +558,14 @@ async def stage3_translate_with_fallback(categorized_data: dict, session_id: str
                 "fallback_used": result.metadata.get("fallback_used", False)
             })
             
-            # 進行状況通知
-            if session_id:
-                await send_progress(session_id, 3, "completed", "🌍 翻訳完了", {
-                    "translatedCategories": result.translated_categories,
-                    "translation_method": result.translation_method,
-                    "total_items": total_items,
-                    "fallback_used": result.metadata.get("fallback_used", False)
-                })
+            # 進行状況通知は process_menu_background で統一管理
+            # if session_id:
+            #     await send_progress(session_id, 3, "completed", "🌍 翻訳完了", {
+            #         "translatedCategories": result.translated_categories,
+            #         "translation_method": result.translation_method,
+            #         "total_items": total_items,
+            #         "fallback_used": result.metadata.get("fallback_used", False)
+            #     })
         else:
             # エラー時の詳細情報を追加
             legacy_result.update({
@@ -756,13 +752,19 @@ async def process_menu_background(session_id: str, file_path: str):
         # Stage 1: OCR with Gemini 2.0 Flash (Gemini専用モード)
         await send_progress(session_id, 1, "active", "🎯 Gemini 2.0 Flashで画像からテキストを抽出中...")
         
-        # Gemini専用OCRサービスを使用
+                # Gemini専用OCRサービスを使用
         stage1_result = await stage1_ocr_gemini_exclusive(file_path, session_id)
         
         if not stage1_result["success"]:
             await send_progress(session_id, 1, "error", f"OCRエラー: {stage1_result['error']}")
             return
-        
+
+        # Stage 1完了通知（重要: フロントエンドのステージ遷移に必須）
+        await send_progress(session_id, 1, "completed", "✅ テキスト抽出完了", {
+            "extracted_text": stage1_result["extracted_text"],
+            "extracted_length": len(stage1_result["extracted_text"])
+        })
+
         # Stage 2: 日本語カテゴリ分類（OpenAI専用モード）
         await send_progress(session_id, 2, "active", "🏷️ OpenAI Function Callingでメニューを分析中...")
         stage2_result = await stage2_categorize_openai_exclusive(stage1_result["extracted_text"], session_id)
@@ -771,12 +773,25 @@ async def process_menu_background(session_id: str, file_path: str):
             await send_progress(session_id, 2, "error", f"分析エラー: {stage2_result['error']}")
             return
             
-        await send_progress(session_id, 2, "completed", "カテゴリ分析完了", {
-            "categories": stage2_result["categories"]
+        await send_progress(session_id, 2, "completed", "🏷️ カテゴリ分析完了！メニューを分類しました", {
+            "categories": stage2_result["categories"],
+            "total_categories": len(stage2_result["categories"]),
+            "total_items": sum(len(items) for items in stage2_result["categories"].values()),
+            "show_categories": True,  # フロントエンドにカテゴリ表示を指示
+            "stage_completed": True   # ステージ完了フラグ
         })
         
         # Stage 3: 翻訳（Google Translate + OpenAI フォールバック）
-        await send_progress(session_id, 3, "active", "🌍 Google Translate + OpenAI フォールバックで翻訳中...")
+        total_categories_to_translate = len(stage2_result["categories"])
+        total_items_to_translate = sum(len(items) for items in stage2_result["categories"].values())
+        
+        await send_progress(session_id, 3, "active", f"🌍 翻訳開始: {total_categories_to_translate}カテゴリ、{total_items_to_translate}アイテムを翻訳中...", {
+            "categories_to_translate": total_categories_to_translate,
+            "items_to_translate": total_items_to_translate,
+            "translation_method": "google_translate_with_openai_fallback",
+            "stage_starting": True
+        })
+        
         stage3_result = await stage3_translate_with_fallback(stage2_result["categories"], session_id)
         
         if not stage3_result["success"]:

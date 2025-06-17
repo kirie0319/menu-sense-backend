@@ -244,6 +244,21 @@ class GoogleTranslateService(BaseTranslationService):
             
             print(f"✅ Google Translate Complete: Translated {len(translated_categories)} categories")
             
+            # 最終的な翻訳完了通知（show_translated_menuフラグ付き）
+            if session_id:
+                await send_progress(
+                    session_id, 3, "completed", 
+                    "✅ Translation Complete! All menu items translated.",
+                    {
+                        "translatedCategories": translated_categories,
+                        "total_translated_items": total_items,
+                        "total_categories": len(translated_categories),
+                        "translation_method": "google_translate",
+                        "show_translated_menu": True,  # UIにメニュー表示を指示
+                        "completion_status": "success"
+                    }
+                )
+            
             return TranslationResult(
                 success=True,
                 translated_categories=translated_categories,

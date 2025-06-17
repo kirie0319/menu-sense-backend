@@ -59,13 +59,22 @@ class Settings(BaseModel):
     RATE_LIMIT_SLEEP: float = 1.0  # API呼び出し間隔
     RETRY_BASE_DELAY: int = 2  # 指数バックオフの基本遅延時間
     
+    # 並列処理設定（詳細説明生成用）
+    CONCURRENT_CHUNK_LIMIT: int = int(os.getenv("CONCURRENT_CHUNK_LIMIT", 5))  # 同時実行チャンク数
+    ENABLE_CATEGORY_PARALLEL: bool = os.getenv("ENABLE_CATEGORY_PARALLEL", "false").lower() == "true"  # カテゴリレベル並列処理
+    
+    # 画像生成並列処理設定
+    IMAGE_CONCURRENT_CHUNK_LIMIT: int = int(os.getenv("IMAGE_CONCURRENT_CHUNK_LIMIT", 3))  # 画像生成同時実行チャンク数
+    ENABLE_IMAGE_CATEGORY_PARALLEL: bool = os.getenv("ENABLE_IMAGE_CATEGORY_PARALLEL", "false").lower() == "true"  # 画像生成カテゴリレベル並列処理
+    IMAGE_PROCESSING_CHUNK_SIZE: int = int(os.getenv("IMAGE_PROCESSING_CHUNK_SIZE", 3))  # 画像生成チャンクサイズ
+    
     # SSE設定（リアルタイム進行状況）
     SSE_HEARTBEAT_INTERVAL: int = 5  # ハートビート間隔（秒）
     SSE_PING_INTERVAL: int = 15  # Ping間隔（秒）
     SSE_MAX_NO_PONG_TIME: int = 60  # Pongタイムアウト（秒）
     
     # 画像生成設定
-    IMAGE_GENERATION_ENABLED: bool = True
+    IMAGE_GENERATION_ENABLED: bool = False  # 一時的に無効化（高速化のため）
     IMAGE_RATE_LIMIT_SLEEP: float = 2.0  # Imagen 3のレート制限対策
     
     class Config:

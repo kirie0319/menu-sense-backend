@@ -24,6 +24,8 @@ class Imagen3Service(BaseImageService):
         self.provider = ImageProvider.IMAGEN3
         self.client = None
         self._initialize_client()
+        # 画像生成並列処理用セマフォ（同時実行数を制限）
+        self.semaphore = asyncio.Semaphore(settings.IMAGE_CONCURRENT_CHUNK_LIMIT)
     
     def _initialize_client(self):
         """Imagen 3 APIクライアントを初期化"""
@@ -117,6 +119,229 @@ class Imagen3Service(BaseImageService):
                 "generation_success": False
             }
     
+    async def process_image_chunk(
+        self, 
+        category: str, 
+        chunk: list, 
+        chunk_number: int, 
+        total_chunks: int,
+        session_id: Optional[str] = None
+    ) -> list:
+        """画像生成チャンクを処理"""
+        print(f"  🖼️ Processing image chunk {chunk_number}/{total_chunks} ({len(chunk)} items)")
+        
+        # 進行状況通知（チャンク処理中）
+        if session_id:
+            from app.main import send_progress
+            await send_progress(
+                session_id, 5, "active", 
+                f"🎨 Processing {category} images (chunk {chunk_number}/{total_chunks})",
+                {"chunk_progress": f"{chunk_number}/{total_chunks}", "parallel_processing": True}
+            )
+        
+        chunk_results = []
+        
+        try:
+            for i, item in enumerate(chunk):
+                if not self.validate_menu_item(item):
+                    print(f"    ⚠️ Skipping invalid menu item: {item}")
+                    continue
+                
+                japanese_name = item.get("japanese_name", "N/A")
+                english_name = item.get("english_name", "N/A")
+                description = item.get("description", "")
+                
+                print(f"    🎨 Generating image for: {english_name} (item {i+1}/{len(chunk)})")
+                
+                # 単一画像生成
+                image_result = await self.generate_single_image(
+                    japanese_name, english_name, description, category
+                )
+                
+                chunk_results.append(image_result)
+                
+                if image_result.get("generation_success"):
+                    print(f"      ✅ Image generated successfully: {image_result.get('image_url')}")
+                else:
+                    print(f"      ❌ Failed to generate image: {image_result.get('error', 'Unknown error')}")
+                
+                # レート制限対策（チャンク内では短めに）
+                if i < len(chunk) - 1:  # 最後のアイテムでない場合のみ待機
+                    await asyncio.sleep(settings.IMAGE_RATE_LIMIT_SLEEP * 0.5)
+            
+            print(f"    ✅ Successfully processed image chunk {chunk_number}/{total_chunks}")
+            return chunk_results
+            
+        except Exception as chunk_error:
+            print(f"  ⚠️ Image chunk processing error: {chunk_error}")
+            print(f"    🔄 Creating fallback results for chunk {chunk_number}")
+            
+            # エラー時はフォールバック結果を生成
+            fallback_results = []
+            for item in chunk:
+                fallback_results.append({
+                    "japanese_name": item.get("japanese_name", "N/A"),
+                    "english_name": item.get("english_name", "N/A"),
+                    "image_url": None,
+                    "error": f"Chunk processing error: {str(chunk_error)}",
+                    "generation_success": False
+                })
+            
+            return fallback_results
+    
+    async def process_image_chunk_with_semaphore(
+        self, 
+        category: str, 
+        chunk: list, 
+        chunk_number: int, 
+        total_chunks: int,
+        session_id: Optional[str] = None
+    ) -> tuple:
+        """セマフォを使用して画像チャンクを並列処理"""
+        async with self.semaphore:
+            print(f"  🚀 Starting parallel image chunk {chunk_number}/{total_chunks} ({len(chunk)} items)")
+            
+            # 進行状況通知（チャンク開始）
+            if session_id:
+                from app.main import send_progress
+                await send_progress(
+                    session_id, 5, "active", 
+                    f"🚀 Starting parallel image generation for {category} (chunk {chunk_number}/{total_chunks})",
+                    {
+                        "chunk_progress": f"{chunk_number}/{total_chunks}",
+                        "parallel_processing": True,
+                        "chunk_started": chunk_number
+                    }
+                )
+            
+            try:
+                # チャンク処理を実行
+                result = await self.process_image_chunk(category, chunk, chunk_number, total_chunks, session_id)
+                
+                print(f"  ✅ Completed parallel image chunk {chunk_number}/{total_chunks}")
+                return (chunk_number, result, None)  # (chunk_number, result, error)
+                
+            except Exception as e:
+                print(f"  ❌ Error in parallel image chunk {chunk_number}/{total_chunks}: {e}")
+                return (chunk_number, None, str(e))
+    
+    async def process_category_parallel(
+        self,
+        category: str,
+        items: list,
+        session_id: Optional[str] = None
+    ) -> list:
+        """カテゴリ内のアイテムを並列チャンク処理で画像生成"""
+        if not items:
+            return []
+            
+        print(f"🎨 Processing category images: {category} ({len(items)} items) - PARALLEL MODE")
+        
+        # 進行状況通知（カテゴリ開始）
+        if session_id:
+            from app.main import send_progress
+            await send_progress(
+                session_id, 5, "active", 
+                f"🎨 Generating images for {category} (parallel processing)...",
+                {
+                    "processing_category": category,
+                    "parallel_mode": True,
+                    "total_items": len(items)
+                }
+            )
+        
+        # チャンクに分割
+        chunk_size = settings.IMAGE_PROCESSING_CHUNK_SIZE
+        chunks = []
+        
+        for i in range(0, len(items), chunk_size):
+            chunk = items[i:i + chunk_size]
+            chunk_number = (i // chunk_size) + 1
+            total_chunks = (len(items) + chunk_size - 1) // chunk_size
+            chunks.append((chunk, chunk_number, total_chunks))
+        
+        print(f"  📦 Created {len(chunks)} image chunks for parallel processing")
+        
+        # 全チャンクを並列で処理
+        tasks = []
+        for chunk, chunk_number, total_chunks in chunks:
+            task = self.process_image_chunk_with_semaphore(
+                category, chunk, chunk_number, total_chunks, session_id
+            )
+            tasks.append(task)
+        
+        # 並列実行開始
+        print(f"  🚀 Starting {len(tasks)} parallel image chunk tasks...")
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 結果を処理
+        category_results = []
+        successful_chunks = 0
+        failed_chunks = 0
+        
+        # チャンク番号でソート（元の順序を維持）
+        sorted_results = []
+        for result in results:
+            if isinstance(result, tuple):
+                sorted_results.append(result)
+            else:
+                # 例外が発生した場合
+                print(f"  ⚠️ Exception in parallel image processing: {result}")
+                failed_chunks += 1
+        
+        sorted_results.sort(key=lambda x: x[0])  # chunk_numberでソート
+        
+        for chunk_number, chunk_result, error in sorted_results:
+            if error:
+                print(f"  ⚠️ Image chunk {chunk_number} failed: {error}")
+                failed_chunks += 1
+                # フォールバック処理（空の結果を追加）
+            elif chunk_result:
+                category_results.extend(chunk_result)
+                successful_chunks += 1
+                
+                # チャンク完了の進捗送信
+                if session_id:
+                    successful_images = sum(1 for img in chunk_result if img.get("generation_success"))
+                    await send_progress(
+                        session_id, 5, "active", 
+                        f"🎨 {category}: Image chunk {chunk_number} completed ({successful_images}/{len(chunk_result)} images)",
+                        {
+                            "processing_category": category,
+                            "chunk_completed": chunk_number,
+                            "chunk_result": chunk_result,
+                            "parallel_processing": True,
+                            "successful_chunks": successful_chunks,
+                            "failed_chunks": failed_chunks,
+                            "chunk_images_generated": successful_images,
+                            "chunk_images_failed": len(chunk_result) - successful_images
+                        }
+                    )
+        
+        print(f"  ✅ Parallel image processing complete: {successful_chunks} successful, {failed_chunks} failed chunks")
+        
+        # カテゴリ完了通知
+        if session_id:
+            category_successful = sum(1 for img in category_results if img.get("generation_success"))
+            await send_progress(
+                session_id, 5, "active", 
+                f"✅ {category}の画像生成完了！{category_successful}/{len(category_results)}枚の画像を並列処理で生成しました",
+                {
+                    "category_completed": category,
+                    "category_images": category_results,
+                    "successful_images": category_successful,
+                    "total_category_items": len(category_results),
+                    "parallel_processing_stats": {
+                        "successful_chunks": successful_chunks,
+                        "failed_chunks": failed_chunks,
+                        "total_chunks": len(chunks),
+                        "processing_mode": "parallel"
+                    }
+                }
+            )
+        
+        return category_results
+    
     async def generate_images(
         self, 
         final_menu: dict, 
@@ -174,95 +399,53 @@ class Imagen3Service(BaseImageService):
             successful_images = 0
             
             print(f"🖼️ Total items to generate images for: {total_items}")
+            print(f"🚀 Parallel image processing enabled with max {settings.IMAGE_CONCURRENT_CHUNK_LIMIT} concurrent chunks")
             
-            # カテゴリごとに画像生成
-            for category, items in final_menu.items():
-                if not items:
-                    images_generated[category] = []
-                    continue
-                    
-                print(f"🎨 Generating images for category: {category} ({len(items)} items)")
+            # カテゴリの並列処理も可能にする（オプション）
+            if settings.ENABLE_IMAGE_CATEGORY_PARALLEL and len(final_menu) > 1:
+                print("🌟 Category-level parallel image processing enabled")
                 
-                # 進捗送信（カテゴリ開始）
-                if session_id:
-                    from app.main import send_progress
-                    await send_progress(
-                        session_id, 5, "active", 
-                        f"🎨 {category}の画像を生成中...",
-                        {"processing_category": category, "total_categories": len(final_menu)}
-                    )
+                # カテゴリごとの処理タスクを作成
+                category_tasks = []
+                for category, items in final_menu.items():
+                    if items:  # 空でないカテゴリのみ処理
+                        task = self.process_category_parallel(category, items, session_id)
+                        category_tasks.append((category, task))
                 
-                category_images = []
+                # カテゴリを並列で処理
+                category_results = await asyncio.gather(
+                    *[task for _, task in category_tasks], 
+                    return_exceptions=True
+                )
                 
-                # カテゴリ内の各アイテムに対して画像生成
-                for i, item in enumerate(items):
-                    if not self.validate_menu_item(item):
-                        print(f"  ⚠️ Skipping invalid menu item: {item}")
-                        processed_items += 1
+                # 結果をマッピング
+                for i, (category, _) in enumerate(category_tasks):
+                    if i < len(category_results) and not isinstance(category_results[i], Exception):
+                        images_generated[category] = category_results[i]
+                        # 成功した画像数をカウント
+                        successful_images += sum(1 for img in category_results[i] if img.get("generation_success"))
+                    else:
+                        print(f"⚠️ Category {category} image processing failed")
+                        images_generated[category] = []
+                
+                # 空のカテゴリを追加
+                for category, items in final_menu.items():
+                    if not items:
+                        images_generated[category] = []
+                        
+            else:
+                # カテゴリごとに順次処理（但しチャンク内は並列）
+                for category, items in final_menu.items():
+                    if not items:
+                        images_generated[category] = []
                         continue
                     
-                    japanese_name = item.get("japanese_name", "N/A")
-                    english_name = item.get("english_name", "N/A")
-                    description = item.get("description", "")
+                    # カテゴリ内並列処理を実行
+                    category_results = await self.process_category_parallel(category, items, session_id)
+                    images_generated[category] = category_results
                     
-                    print(f"  🖼️ Generating image {i+1}/{len(items)}: {english_name}")
-                    
-                    # 進捗送信（個別アイテム）
-                    if session_id:
-                        await send_progress(
-                            session_id, 5, "active", 
-                            f"🎨 {category}: {english_name}の画像を生成中...",
-                            {"current_item": english_name, "item_progress": f"{i+1}/{len(items)}"}
-                        )
-                    
-                    # 単一画像生成
-                    image_result = await self.generate_single_image(
-                        japanese_name, english_name, description, category
-                    )
-                    
-                    category_images.append(image_result)
-                    processed_items += 1
-                    
-                    if image_result.get("generation_success"):
-                        successful_images += 1
-                        print(f"    ✅ Image generated successfully: {image_result.get('image_url')}")
-                    else:
-                        print(f"    ❌ Failed to generate image for {english_name}: {image_result.get('error', 'Unknown error')}")
-                    
-                    # 進捗更新
-                    if session_id:
-                        progress_percent = int((processed_items / total_items) * 100)
-                        await send_progress(
-                            session_id, 5, "active", 
-                            f"🎨 {category}: {english_name}の画像生成完了",
-                            {
-                                "progress_percent": progress_percent,
-                                "completed_item": english_name,
-                                "images_generated": len([img for img in category_images if img.get("generation_success")]),
-                                "images_failed": len([img for img in category_images if not img.get("generation_success")])
-                            }
-                        )
-                    
-                    # レート制限対策
-                    await asyncio.sleep(settings.IMAGE_RATE_LIMIT_SLEEP)
-                
-                images_generated[category] = category_images
-                
-                # カテゴリ完了通知
-                if session_id:
-                    category_successful = sum(1 for img in category_images if img.get("generation_success"))
-                    await send_progress(
-                        session_id, 5, "active", 
-                        f"✅ {category}の画像生成完了！{category_successful}/{len(category_images)}枚の画像を生成しました",
-                        {
-                            "category_completed": category,
-                            "category_images": category_images,
-                            "successful_images": category_successful,
-                            "total_category_items": len(category_images)
-                        }
-                    )
-                
-                print(f"✅ Category '{category}' completed: {len(category_images)} items processed, {category_successful} successful")
+                    # 成功した画像数をカウント
+                    successful_images += sum(1 for img in category_results if img.get("generation_success"))
             
             print(f"🎉 Imagen 3 Image Generation Complete: Generated {successful_images}/{total_items} images")
             
@@ -286,13 +469,21 @@ class Imagen3Service(BaseImageService):
                         "category_specific_styling",
                         "japanese_cuisine_focus",
                         "high_quality_generation",
-                        "real_time_progress"
+                        "real_time_progress",
+                        "parallel_chunked_processing"
                     ],
                     "image_settings": {
                         "model": settings.IMAGEN_MODEL,
                         "aspect_ratio": settings.IMAGEN_ASPECT_RATIO,
                         "number_of_images": settings.IMAGEN_NUMBER_OF_IMAGES,
                         "rate_limit_sleep": settings.IMAGE_RATE_LIMIT_SLEEP
+                    },
+                    "parallel_processing": {
+                        "enabled": True,
+                        "concurrent_chunk_limit": settings.IMAGE_CONCURRENT_CHUNK_LIMIT,
+                        "category_parallel": settings.ENABLE_IMAGE_CATEGORY_PARALLEL,
+                        "chunk_size": settings.IMAGE_PROCESSING_CHUNK_SIZE,
+                        "processing_mode": "parallel_chunked"
                     }
                 }
             )
