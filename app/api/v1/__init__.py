@@ -1,9 +1,16 @@
 from fastapi import APIRouter
+from fastapi.staticfiles import StaticFiles
+import os
 
 from .endpoints import ocr, category, translation, description, image, ui, menu, session, system
+from app.core.config import settings
 
 # APIルーターの作成
 api_router = APIRouter()
+
+# 静的ファイル配信を最初に追加（ルーティング優先度のため）
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+api_router.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="api_uploads")
 
 # UIエンドポイントを追加（main.pyから移行）
 api_router.include_router(ui.router, prefix="", tags=["UI"])

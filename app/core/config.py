@@ -74,7 +74,7 @@ class Settings(BaseModel):
     SSE_MAX_NO_PONG_TIME: int = 60  # Pongタイムアウト（秒）
     
     # 画像生成設定
-    IMAGE_GENERATION_ENABLED: bool = False  # 一時的に無効化（高速化のため）
+    IMAGE_GENERATION_ENABLED: bool = True  # 一時的に無効化（高速化のため）
     IMAGE_RATE_LIMIT_SLEEP: float = 2.0  # Imagen 3のレート制限対策
     
     class Config:

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
 import aiofiles
@@ -41,6 +42,12 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description=settings.APP_DESCRIPTION
 )
+
+# アップロードディレクトリの作成
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+
+# 静的ファイル配信の設定（画像アクセス用）
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # APIルーターを統合
 app.include_router(api_router, prefix="/api/v1")
