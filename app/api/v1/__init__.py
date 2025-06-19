@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from fastapi.staticfiles import StaticFiles
 import os
 
-from .endpoints import ocr, category, translation, description, image, ui, menu, session, system
+from .endpoints import ocr, category, translation, description, image, ui, menu, session, system, pipeline
 from app.core.config import settings
 
 # APIルーターの作成
@@ -38,3 +38,6 @@ api_router.include_router(description.router, prefix="/description", tags=["Desc
 
 # 画像生成エンドポイントを追加
 api_router.include_router(image.router, prefix="/image", tags=["Image Generation"])
+
+# パイプライン並列化エンドポイントを追加
+api_router.include_router(pipeline.router, prefix="/pipeline", tags=["Pipeline Parallel Processing"])

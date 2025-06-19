@@ -26,42 +26,60 @@ def get_progress_function():
     except ImportError:
         return None
 
-# Stage 1: OCR - 文字認識 (Gemini専用版)
+# Stage 1: OCR並列処理版
 async def stage1_ocr_gemini_exclusive(image_path: str, session_id: str = None) -> dict:
-    """Stage 1: Gemini 2.0 Flash OCRを使って画像からテキストを抽出（Gemini専用モード）"""
-    print("🎯 Stage 1: Starting OCR with Gemini 2.0 Flash (Exclusive Mode)...")
+    """Stage 1: 並列OCRで高精度・高速化（マルチエンジン + フォールバック）"""
+    print("🚀 Stage 1: Starting OCR with PARALLEL processing...")
     
     send_progress = get_progress_function()
     
     try:
-        # Gemini専用OCRサービスを使用
-        result = await ocr_extract_text(image_path, session_id)
+        # 並列OCRサービスを使用
+        from app.services.ocr.parallel import extract_text_with_parallel
+        
+        result = await extract_text_with_parallel(image_path, session_id)
         
         # レガシー形式に変換
         legacy_result = {
             "stage": 1,
             "success": result.success,
             "extracted_text": result.extracted_text,
-            "ocr_engine": "gemini-2.0-flash",
-            "mode": "gemini_exclusive"
+            "ocr_engine": result.metadata.get("selected_engine", "gemini-2.0-flash"),
+            "mode": "parallel_ocr_with_fallback"
         }
         
         if result.success:
             # 成功時のメタデータを追加
+            processing_mode = result.metadata.get("processing_mode", "unknown")
+            
             legacy_result.update({
                 "text_length": len(result.extracted_text),
-                "ocr_service": "Gemini 2.0 Flash",
-                "features": ["menu_optimized", "japanese_text", "high_precision"],
-                "file_size": result.metadata.get("file_size", 0)
+                "ocr_service": result.metadata.get("provider", "Parallel OCR Service"),
+                "processing_mode": processing_mode,
+                "parallel_enabled": result.metadata.get("parallel_enabled", False),
+                "selected_engine": result.metadata.get("selected_engine", "unknown"),
+                "engines_used": result.metadata.get("engines_used", []),
+                "all_results": result.metadata.get("all_results", {}),
+                "selection_reason": result.metadata.get("selection_reason", ""),
+                "processing_time": result.metadata.get("processing_time"),
+                "features": result.metadata.get("features", ["menu_optimized", "japanese_text", "high_precision"])
             })
+            
+            # 性能向上の表示
+            if result.metadata.get("parallel_enabled", False):
+                print(f"🚀 PARALLEL OCR successful - {len(result.extracted_text)} characters extracted with enhanced accuracy")
+            else:
+                processing_mode_display = processing_mode.replace("_", " ").title()
+                print(f"🔄 {processing_mode_display} used - {len(result.extracted_text)} characters extracted")
             
             # 進行状況通知は process_menu_background で統一管理
             # if session_id:
-            #     await send_progress(session_id, 1, "completed", "🎯 Gemini OCR完了", {
+            #     await send_progress(session_id, 1, "completed", "🚀 並列OCR完了", {
             #         "extracted_text": result.extracted_text,
             #         "text_preview": result.extracted_text[:100] + "..." if len(result.extracted_text) > 100 else result.extracted_text,
-            #         "ocr_service": "Gemini 2.0 Flash",
-            #         "ocr_engine": "gemini-2.0-flash"
+            #         "ocr_service": result.metadata.get("provider", "Parallel OCR Service"),
+            #         "processing_mode": processing_mode,
+            #         "parallel_enabled": result.metadata.get("parallel_enabled", False)
             #     })
         else:
             # エラー時の詳細情報を追加
@@ -70,48 +88,53 @@ async def stage1_ocr_gemini_exclusive(image_path: str, session_id: str = None) -
                 "detailed_error": result.metadata
             })
             
+            print(f"❌ Parallel OCR failed: {result.error}")
+            
             # 進行状況通知
             if session_id and send_progress:
-                await send_progress(session_id, 1, "error", f"🎯 Gemini OCRエラー: {result.error}", result.metadata)
+                await send_progress(session_id, 1, "error", f"🚀 並列OCRエラー: {result.error}", result.metadata)
         
         return legacy_result
         
     except Exception as e:
-        print(f"❌ Stage 1 Gemini OCR Failed: {e}")
+        print(f"❌ Stage 1 Parallel OCR Service Failed: {e}")
         
         error_result = {
             "stage": 1,
             "success": False,
-            "error": f"Gemini OCRサービスでエラーが発生しました: {str(e)}",
-            "ocr_engine": "gemini-2.0-flash",
-            "mode": "gemini_exclusive", 
+            "error": f"並列OCRサービスでエラーが発生しました: {str(e)}",
+            "ocr_engine": "parallel_multi_engine",
+            "mode": "parallel_ocr_with_fallback",
             "detailed_error": {
-                "error_type": "gemini_ocr_error",
+                "error_type": "parallel_ocr_service_error",
                 "original_error": str(e),
                 "suggestions": [
                     "GEMINI_API_KEYが正しく設定されているか確認してください",
-                    "Gemini APIの利用状況・クォータを確認してください",
-                    "google-generativeaiパッケージがインストールされているか確認してください"
+                    "Celeryワーカーが起動しているか確認してください",
+                    "並列OCRの設定（ENABLE_PARALLEL_OCR）を確認してください",
+                    "Google Vision APIまたはGemini APIの利用状況・クォータを確認してください"
                 ]
             },
             "extracted_text": ""
         }
         
         if session_id and send_progress:
-            await send_progress(session_id, 1, "error", f"🎯 Gemini OCRエラー: {str(e)}", error_result["detailed_error"])
+            await send_progress(session_id, 1, "error", f"🚀 並列OCRエラー: {str(e)}", error_result["detailed_error"])
         
         return error_result
 
-# Stage 2: 日本語のままカテゴリ分類・枠組み作成 (OpenAI専用版)
+# Stage 2: 日本語のままカテゴリ分類・枠組み作成 (並列化対応版)
 async def stage2_categorize_openai_exclusive(extracted_text: str, session_id: str = None) -> dict:
-    """Stage 2: OpenAI Function Callingを使って抽出されたテキストを日本語のままカテゴリ分類（OpenAI専用モード）"""
-    print("🏷️ Stage 2: Starting Japanese categorization with OpenAI Function Calling (Exclusive Mode)...")
+    """Stage 2: OpenAI Function Callingを使って抽出されたテキストを日本語のままカテゴリ分類（並列化対応）"""
+    print("🏷️ Stage 2: Starting Japanese categorization with PARALLEL PROCESSING...")
     
     send_progress = get_progress_function()
     
     try:
-        # 新しいカテゴリサービスを使用
-        result = await category_categorize_menu(extracted_text, session_id)
+        # 並列カテゴライズサービスを使用
+        from app.services.category.parallel import categorize_menu_with_parallel
+        
+        result = await categorize_menu_with_parallel(extracted_text, session_id)
         
         # レガシー形式に変換
         legacy_result = {
@@ -119,8 +142,8 @@ async def stage2_categorize_openai_exclusive(extracted_text: str, session_id: st
             "success": result.success,
             "categories": result.categories,
             "uncategorized": result.uncategorized,
-            "categorization_engine": "openai-function-calling",
-            "mode": "openai_exclusive"
+            "categorization_engine": "openai-function-calling-parallel",
+            "mode": "parallel_categorization"
         }
         
         if result.success:
@@ -130,17 +153,14 @@ async def stage2_categorize_openai_exclusive(extracted_text: str, session_id: st
                 "total_items": total_items,
                 "total_categories": len(result.categories),
                 "uncategorized_count": len(result.uncategorized),
-                "categorization_service": "OpenAI Function Calling"
+                "categorization_service": "Parallel Categorization Service",
+                "parallel_processing": True,
+                "processing_time": result.metadata.get('processing_time', 0),
+                "parallel_strategy": result.metadata.get('parallel_strategy', 'unknown')
             })
             
-            # 進行状況通知は process_menu_background で統一管理
-            # if session_id:
-            #     await send_progress(session_id, 2, "completed", "🏷️ OpenAI カテゴリ分類完了", {
-            #         "categories": result.categories,
-            #         "uncategorized": result.uncategorized,
-            #         "total_items": total_items,
-            #         "categorization_engine": "openai-function-calling"
-            #     })
+            print(f"✅ Stage 2 PARALLEL Categorization Complete: {total_items} items in {len(result.categories)} categories")
+            
         else:
             # エラー時の詳細情報を追加
             legacy_result.update({
@@ -149,6 +169,76 @@ async def stage2_categorize_openai_exclusive(extracted_text: str, session_id: st
             })
             
             # 進行状況通知
+            if session_id and send_progress:
+                await send_progress(session_id, 2, "error", f"🏷️ 並列カテゴリ分類エラー: {result.error}", result.metadata)
+        
+        return legacy_result
+        
+    except Exception as e:
+        print(f"❌ Stage 2 Parallel Categorization Failed: {e}")
+        
+        error_result = {
+            "stage": 2,
+            "success": False,
+            "error": f"並列カテゴリ分類サービスでエラーが発生しました: {str(e)}",
+            "categorization_engine": "openai-function-calling-parallel",
+            "mode": "parallel_categorization",
+            "detailed_error": {
+                "error_type": "parallel_categorization_error",
+                "original_error": str(e),
+                "suggestions": [
+                    "Celeryワーカーが起動しているか確認してください",
+                    "OPENAI_API_KEYが正しく設定されているか確認してください", 
+                    "並列処理設定を確認してください（ENABLE_PARALLEL_CATEGORIZATION）"
+                ]
+            },
+            "categories": {}
+        }
+        
+        if session_id and send_progress:
+            await send_progress(session_id, 2, "error", f"🏷️ 並列カテゴリ分類エラー: {str(e)}", error_result["detailed_error"])
+        
+        return error_result
+
+# Stage 2: 日本語のままカテゴリ分類・枠組み作成 (従来版・フォールバック用)
+async def stage2_categorize_openai_exclusive_legacy(extracted_text: str, session_id: str = None) -> dict:
+    """Stage 2: OpenAI Function Callingを使って抽出されたテキストを日本語のままカテゴリ分類（従来版）"""
+    print("🏷️ Stage 2: Starting Japanese categorization with OpenAI Function Calling (Legacy Mode)...")
+    
+    send_progress = get_progress_function()
+    
+    try:
+        # 従来のカテゴリサービスを使用
+        from app.services.category import category_categorize_menu
+        
+        result = await category_categorize_menu(extracted_text, session_id)
+        
+        # レガシー形式に変換
+        legacy_result = {
+            "stage": 2,
+            "success": result.success,
+            "categories": result.categories,
+            "uncategorized": result.uncategorized,
+            "categorization_engine": "openai-function-calling",
+            "mode": "openai_exclusive_legacy"
+        }
+        
+        if result.success:
+            # 成功時のメタデータを追加
+            total_items = sum(len(items) for items in result.categories.values())
+            legacy_result.update({
+                "total_items": total_items,
+                "total_categories": len(result.categories),
+                "uncategorized_count": len(result.uncategorized),
+                "categorization_service": "OpenAI Function Calling (Legacy)"
+            })
+        else:
+            # エラー時の詳細情報を追加
+            legacy_result.update({
+                "error": result.error,
+                "detailed_error": result.metadata
+            })
+            
             if session_id and send_progress:
                 await send_progress(session_id, 2, "error", f"🏷️ OpenAI カテゴリ分類エラー: {result.error}", result.metadata)
         
@@ -162,7 +252,7 @@ async def stage2_categorize_openai_exclusive(extracted_text: str, session_id: st
             "success": False,
             "error": f"OpenAI カテゴリ分類サービスでエラーが発生しました: {str(e)}",
             "categorization_engine": "openai-function-calling",
-            "mode": "openai_exclusive",
+            "mode": "openai_exclusive_legacy",
             "detailed_error": {
                 "error_type": "openai_categorization_error",
                 "original_error": str(e),
@@ -180,16 +270,18 @@ async def stage2_categorize_openai_exclusive(extracted_text: str, session_id: st
         
         return error_result
 
-# Stage 3: 翻訳 (Google Translate + OpenAI フォールバック版)
+# Stage 3: 翻訳 (並列翻訳版)
 async def stage3_translate_with_fallback(categorized_data: dict, session_id: str = None) -> dict:
-    """Stage 3: Google Translate + OpenAI フォールバックで翻訳（新サービス層使用）"""
-    print("🌍 Stage 3: Starting translation with Google Translate + OpenAI fallback...")
+    """Stage 3: 並列翻訳で高速化（Google Translate + OpenAI フォールバック）"""
+    print("🚀 Stage 3: Starting PARALLEL translation with enhanced performance...")
     
     send_progress = get_progress_function()
     
     try:
-        # 新しい翻訳サービスを使用
-        result = await translation_translate_menu(categorized_data, session_id)
+        # 並列翻訳サービスを使用
+        from app.services.translation.parallel import translate_menu_with_parallel
+        
+        result = await translate_menu_with_parallel(categorized_data, session_id)
         
         # レガシー形式に変換
         legacy_result = {
@@ -197,26 +289,39 @@ async def stage3_translate_with_fallback(categorized_data: dict, session_id: str
             "success": result.success,
             "translated_categories": result.translated_categories,
             "translation_method": result.translation_method,
-            "translation_architecture": "google_translate_with_openai_fallback"
+            "translation_architecture": "parallel_translation_with_fallback"
         }
         
         if result.success:
             # 成功時のメタデータを追加
             total_items = sum(len(items) for items in result.translated_categories.values())
+            processing_mode = result.metadata.get("processing_mode", "unknown")
+            
             legacy_result.update({
                 "total_items": total_items,
                 "total_categories": len(result.translated_categories),
-                "translation_service": result.metadata.get("successful_service", "unknown"),
-                "fallback_used": result.metadata.get("fallback_used", False)
+                "translation_service": result.metadata.get("provider", "Parallel Translation Service"),
+                "processing_mode": processing_mode,
+                "parallel_enabled": processing_mode == "parallel_direct",
+                "fallback_used": result.metadata.get("fallback_used", False),
+                "failed_categories": result.metadata.get("failed_categories"),
+                "processing_time": result.metadata.get("total_processing_time")
             })
+            
+            # 性能向上の表示
+            if processing_mode == "parallel_direct":
+                print(f"🚀 PARALLEL Translation successful - {total_items} items processed with enhanced speed")
+            else:
+                print(f"🔄 Sequential fallback used - {total_items} items processed")
             
             # 進行状況通知は process_menu_background で統一管理
             # if session_id:
-            #     await send_progress(session_id, 3, "completed", "🌍 翻訳完了", {
+            #     await send_progress(session_id, 3, "completed", "🚀 並列翻訳完了", {
             #         "translatedCategories": result.translated_categories,
             #         "translation_method": result.translation_method,
             #         "total_items": total_items,
-            #         "fallback_used": result.metadata.get("fallback_used", False)
+            #         "processing_mode": processing_mode,
+            #         "parallel_enabled": processing_mode == "parallel_direct"
             #     })
         else:
             # エラー時の詳細情報を追加
@@ -227,43 +332,48 @@ async def stage3_translate_with_fallback(categorized_data: dict, session_id: str
             
             # 進行状況通知
             if session_id and send_progress:
-                await send_progress(session_id, 3, "error", f"🌍 翻訳エラー: {result.error}", result.metadata)
+                await send_progress(session_id, 3, "error", f"🚀 並列翻訳エラー: {result.error}", result.metadata)
         
         return legacy_result
         
     except Exception as e:
-        print(f"❌ Stage 3 Translation Service Failed: {e}")
+        print(f"❌ Stage 3 Parallel Translation Service Failed: {e}")
         
         error_result = {
             "stage": 3,
             "success": False,
-            "error": f"翻訳サービスでエラーが発生しました: {str(e)}",
-            "translation_architecture": "google_translate_with_openai_fallback",
+            "error": f"並列翻訳サービスでエラーが発生しました: {str(e)}",
+            "translation_architecture": "parallel_translation_with_fallback",
             "detailed_error": {
-                "error_type": "translation_service_error",
+                "error_type": "parallel_translation_service_error",
                 "original_error": str(e),
                 "suggestions": [
                     "GOOGLE_CREDENTIALS_JSONまたはOPENAI_API_KEYが正しく設定されているか確認してください",
-                    "Google Translate APIまたはOpenAI APIの利用状況・クォータを確認してください",
-                    "必要なパッケージがインストールされているか確認してください"
+                    "Celeryワーカーが起動しているか確認してください",
+                    "並列翻訳の設定（ENABLE_PARALLEL_TRANSLATION）を確認してください",
+                    "Google Translate APIまたはOpenAI APIの利用状況・クォータを確認してください"
                 ]
             },
             "translated_categories": {}
         }
         
         if session_id and send_progress:
-            await send_progress(session_id, 3, "error", f"🌍 翻訳エラー: {str(e)}", error_result["detailed_error"])
+            await send_progress(session_id, 3, "error", f"🚀 並列翻訳エラー: {str(e)}", error_result["detailed_error"])
         
         return error_result
 
-# Stage 4: 詳細説明追加 (新サービス層使用)
+# Stage 4: 詳細説明追加 (並列処理版)
 async def stage4_add_descriptions(translated_data: dict, session_id: str = None) -> dict:
-    """Stage 4: OpenAI詳細説明サービスで詳細説明を追加（新サービス層使用）"""
-    print("📝 Stage 4: Adding detailed descriptions with OpenAI service...")
+    """Stage 4: 並列詳細説明で高速化（OpenAI並列ワーカー + フォールバック）"""
+    print("🚀 Stage 4: Adding detailed descriptions with PARALLEL processing...")
+    
+    send_progress = get_progress_function()
     
     try:
-        # 新しい詳細説明サービスを使用
-        result = await description_add_descriptions(translated_data, session_id)
+        # 並列詳細説明サービスを使用
+        from app.services.description.parallel import add_descriptions_with_parallel
+        
+        result = await add_descriptions_with_parallel(translated_data, session_id)
         
         # レガシー形式に変換
         legacy_result = {
@@ -271,20 +381,42 @@ async def stage4_add_descriptions(translated_data: dict, session_id: str = None)
             "success": result.success,
             "final_menu": result.final_menu,
             "description_method": result.description_method,
-            "description_architecture": "openai_chunked_processing"
+            "description_architecture": "parallel_description_with_fallback"
         }
         
         if result.success:
             # 成功時のメタデータを追加
             total_items = sum(len(items) for items in result.final_menu.values())
+            processing_mode = result.metadata.get("processing_mode", "unknown")
+            
             legacy_result.update({
                 "total_items": total_items,
                 "categories_processed": len(result.final_menu),
-                "description_service": result.metadata.get("provider", "OpenAI API"),
+                "description_service": result.metadata.get("provider", "OpenAI API (Parallel)"),
+                "processing_mode": processing_mode,
+                "parallel_enabled": result.metadata.get("parallel_enabled", False),
+                "fallback_used": result.metadata.get("fallback_reason") is not None,
+                "failed_categories": result.metadata.get("failed_categories"),
+                "processing_time": result.metadata.get("processing_time"),
                 "features": result.metadata.get("features", [])
             })
             
-            print(f"✅ OpenAI Description Generation successful - {total_items} items processed")
+            # 性能向上の表示
+            if result.metadata.get("parallel_enabled", False):
+                print(f"🚀 PARALLEL Description successful - {total_items} items processed with enhanced speed")
+            else:
+                processing_mode_display = processing_mode.replace("_", " ").title()
+                print(f"🔄 {processing_mode_display} used - {total_items} items processed")
+            
+            # 進行状況通知は process_menu_background で統一管理
+            # if session_id:
+            #     await send_progress(session_id, 4, "completed", "🚀 並列詳細説明完了", {
+            #         "finalMenu": result.final_menu,
+            #         "description_method": result.description_method,
+            #         "total_items": total_items,
+            #         "processing_mode": processing_mode,
+            #         "parallel_enabled": result.metadata.get("parallel_enabled", False)
+            #     })
             
         else:
             # エラー時の詳細情報を追加
@@ -293,30 +425,37 @@ async def stage4_add_descriptions(translated_data: dict, session_id: str = None)
                 "detailed_error": result.metadata
             })
             
-            print(f"❌ OpenAI Description Generation failed: {result.error}")
+            print(f"❌ Parallel Description Generation failed: {result.error}")
+            
+            # 進行状況通知
+            if session_id and send_progress:
+                await send_progress(session_id, 4, "error", f"🚀 並列詳細説明エラー: {result.error}", result.metadata)
         
         return legacy_result
         
     except Exception as e:
-        print(f"❌ Stage 4 Description Service Failed: {e}")
+        print(f"❌ Stage 4 Parallel Description Service Failed: {e}")
         
         error_result = {
             "stage": 4,
             "success": False,
-            "error": f"詳細説明サービスでエラーが発生しました: {str(e)}",
-            "description_architecture": "openai_chunked_processing",
+            "error": f"並列詳細説明サービスでエラーが発生しました: {str(e)}",
+            "description_architecture": "parallel_description_with_fallback",
             "detailed_error": {
-                "error_type": "description_service_error",
+                "error_type": "parallel_description_service_error",
                 "original_error": str(e),
                 "suggestions": [
                     "OPENAI_API_KEYが正しく設定されているか確認してください",
-                    "OpenAI APIの利用状況・クォータを確認してください",
-                    "openaiパッケージがインストールされているか確認してください",
-                    "入力データの形式が正しいか確認してください"
+                    "Celeryワーカーが起動しているか確認してください",
+                    "並列詳細説明の設定（ENABLE_PARALLEL_DESCRIPTION）を確認してください",
+                    "OpenAI APIの利用状況・クォータを確認してください"
                 ]
             },
             "final_menu": {}
         }
+        
+        if session_id and send_progress:
+            await send_progress(session_id, 4, "error", f"🚀 並列詳細説明エラー: {str(e)}", error_result["detailed_error"])
         
         return error_result
 

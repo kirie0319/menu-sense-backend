@@ -28,9 +28,14 @@ class OCRServiceManager:
         except Exception as e:
             print(f"❌ Failed to initialize Gemini OCR Service: {e}")
         
-        # Google Visionサービス（無効化 - Gemini専用モード）
-        # Note: Google Vision APIはGemini特化モードでは使用されません
-        print("🔄 Google Vision API disabled - Using Gemini-exclusive OCR mode")
+        # Google Visionサービス（並列処理用に有効化）
+        try:
+            vision_service = GoogleVisionOCRService()
+            self.services[OCRProvider.GOOGLE_VISION] = vision_service
+            status = "✅ Available" if vision_service.is_available() else "❌ Unavailable"
+            print(f"👁️ Google Vision OCR Service (Parallel): {status}")
+        except Exception as e:
+            print(f"❌ Failed to initialize Google Vision OCR Service: {e}")
     
     def get_service(self, provider: OCRProvider) -> Optional[BaseOCRService]:
         """指定されたプロバイダーのサービスを取得"""
