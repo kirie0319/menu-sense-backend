@@ -1,7 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, List
 from pydantic import BaseModel
+from enum import Enum
 from app.core.config import settings
+
+class CategoryProvider(Enum):
+    """カテゴリ分類プロバイダーの列挙型"""
+    OPENAI = "openai"
+    GOOGLE_TRANSLATE = "google_translate"
 
 class CategoryResult(BaseModel):
     """カテゴリ分類結果を格納するクラス"""

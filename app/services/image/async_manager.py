@@ -21,35 +21,53 @@ class AsyncImageManager:
         self.manager_name = "AsyncImageManager"
         logger.info(f"{self.manager_name} initialized")
     
-    def validate_request(self, final_menu: Dict[str, List[Dict]]) -> tuple[bool, str]:
-        """
-        リクエストデータの妥当性をチェック
-        
-        Args:
-            final_menu: 検証対象のメニューデータ
+    def _validate_menu_data(self, final_menu: Dict[str, List[Dict]]) -> tuple[bool, str]:
+        """メニューデータの妥当性をチェック"""
+        try:
+            # 基本的な妥当性チェック
+            if not validate_menu_data(final_menu):
+                return False, "Invalid menu data format"
             
-        Returns:
-            (妥当性フラグ, エラーメッセージ)
-        """
-        if not isinstance(final_menu, dict):
-            return False, "Menu data must be a dictionary"
+            # アイテム数チェック
+            total_items = sum(len(items) for items in final_menu.values())
+            
+            if total_items == 0:
+                return False, "No menu items found"
+            
+            # 新しい柔軟な制限チェック
+            if settings.UNLIMITED_PROCESSING:
+                # 無制限モード - 制限なし
+                logger.info(f"🚀 UNLIMITED_PROCESSING mode: Processing {total_items} items without limits")
+                return True, f"Unlimited processing enabled for {total_items} items"
+            
+            # 制限計算
+            max_allowed = self._calculate_max_items()
+            
+            if total_items > max_allowed:
+                return False, f"Too many items ({total_items}). Maximum allowed: {max_allowed}"
+            
+            logger.info(f"📊 Processing validation passed: {total_items}/{max_allowed} items")
+            return True, f"Validation passed for {total_items} items"
+            
+        except Exception as e:
+            logger.error(f"Menu validation error: {e}")
+            return False, f"Validation error: {str(e)}"
+    
+    def _calculate_max_items(self) -> int:
+        """動的に最大アイテム数を計算"""
+        if settings.UNLIMITED_PROCESSING:
+            return float('inf')  # 無制限
         
-        if not final_menu:
-            return False, "Menu data cannot be empty"
-        
-        # 基本的な妥当性チェック
-        if not validate_menu_data(final_menu):
-            return False, "Invalid menu data structure or missing required fields"
-        
-        # アイテム数チェック
-        total_items = sum(len(items) for items in final_menu.values())
-        if total_items == 0:
-            return False, "No menu items found"
-        
-        if total_items > settings.MAX_IMAGE_WORKERS * 10:  # 適度な制限
-            return False, f"Too many items ({total_items}). Maximum allowed: {settings.MAX_IMAGE_WORKERS * 10}"
-        
-        return True, "Valid"
+        if settings.SCALE_WITH_WORKERS:
+            # ワーカー数に応じたスケーリング
+            calculated_max = settings.MAX_IMAGE_WORKERS * settings.ITEMS_PER_WORKER_RATIO
+            logger.info(f"🔢 Calculated max items: {settings.MAX_IMAGE_WORKERS} workers × {settings.ITEMS_PER_WORKER_RATIO} ratio = {calculated_max}")
+            return calculated_max
+        else:
+            # 固定制限
+            return settings.MAX_ITEMS_PER_JOB
+    
+
     
     def create_job_chunks(self, final_menu: Dict[str, List[Dict]]) -> List[Dict]:
         """
@@ -86,7 +104,7 @@ class AsyncImageManager:
         """
         try:
             # リクエスト妥当性チェック
-            is_valid, error_message = self.validate_request(final_menu)
+            is_valid, error_message = self._validate_menu_data(final_menu)
             if not is_valid:
                 logger.error(f"Request validation failed: {error_message}")
                 return False, error_message, None

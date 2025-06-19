@@ -132,7 +132,7 @@ class Imagen3Service(BaseImageService):
         
         # 進行状況通知（チャンク処理中）
         if session_id:
-            from app.main import send_progress
+            from app.services.realtime import send_progress
             await send_progress(
                 session_id, 5, "active", 
                 f"🎨 Processing {category} images (chunk {chunk_number}/{total_chunks})",
@@ -203,7 +203,7 @@ class Imagen3Service(BaseImageService):
             
             # 進行状況通知（チャンク開始）
             if session_id:
-                from app.main import send_progress
+                from app.services.realtime import send_progress
                 await send_progress(
                     session_id, 5, "active", 
                     f"🚀 Starting parallel image generation for {category} (chunk {chunk_number}/{total_chunks})",
@@ -239,7 +239,7 @@ class Imagen3Service(BaseImageService):
         
         # 進行状況通知（カテゴリ開始）
         if session_id:
-            from app.main import send_progress
+            from app.services.realtime import send_progress
             await send_progress(
                 session_id, 5, "active", 
                 f"🎨 Generating images for {category} (parallel processing)...",

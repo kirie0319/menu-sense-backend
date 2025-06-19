@@ -229,7 +229,9 @@ async def generate_images(
     session_id: Optional[str] = None
 ) -> ImageResult:
     """
-    Imagen 3で画像生成する便利関数
+    ⚠️ **DEPRECATED**: この関数は非推奨です。代わりに非同期処理 `/api/v1/image/generate-async` を使用してください。
+    
+    Imagen 3で画像生成する便利関数（同期処理 - 将来削除予定）
     
     Args:
         final_menu: 詳細説明付きメニューデータ
@@ -237,7 +239,24 @@ async def generate_images(
         
     Returns:
         ImageResult: 画像生成結果
+        
+    Note:
+        この関数は互換性のためにのみ残されています。
+        新しい実装では AsyncImageManager (/generate-async) を使用することを強く推奨します。
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # 非推奨警告を出力
+    logger.warning(
+        "⚠️ DEPRECATED: generate_images() is deprecated and will be removed in future versions. "
+        "Please use AsyncImageManager (/api/v1/image/generate-async) for new implementations."
+    )
+    logger.warning(
+        f"📊 Called with {sum(len(items) for items in final_menu.values())} items. "
+        "Consider using async processing for better performance and scalability."
+    )
+    
     return await image_manager.generate_images_with_imagen3(final_menu, session_id)
 
 def get_image_service_status() -> Dict[str, Dict]:

@@ -14,7 +14,8 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from app.core.config import settings
-from app.services.ocr.base import OCRResult, OCRProvider
+from app.services.ocr.base import OCRResult
+from app.services.ocr import OCRProvider
 from app.services.category.base import CategoryResult, CategoryProvider
 from app.services.translation.base import TranslationResult, TranslationProvider
 from app.services.description.base import DescriptionResult, DescriptionProvider

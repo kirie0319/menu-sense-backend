@@ -18,17 +18,55 @@ except Exception as e:
     logger.error(f"Redis connection failed: {e}")
     redis_client = None
 
-def create_image_chunks(final_menu: Dict[str, List[Dict]], chunk_size: int = 3) -> List[Dict]:
+def create_image_chunks(final_menu: Dict[str, List[Dict]], chunk_size: int = 3, min_chunks: int = None) -> List[Dict]:
     """
-    メニューデータをチャンクに分割
+    メニューデータをチャンクに分割（ワーカー均等活用対応）
     
     Args:
         final_menu: カテゴリ別メニューデータ
-        chunk_size: チャンクサイズ
+        chunk_size: 基本チャンクサイズ
+        min_chunks: 最小チャンク数（ワーカー均等活用用）
         
     Returns:
         チャンク情報のリスト
     """
+    # 全アイテム数を計算
+    total_items = sum(len(items) for items in final_menu.values() if items)
+    
+    if total_items == 0:
+        return []
+    
+    # 最小チャンク数の設定（利用可能ワーカー数に基づく）
+    if min_chunks is None:
+        min_chunks = min(settings.IMAGE_CONCURRENT_CHUNK_LIMIT, total_items)
+    
+    # 強制的なワーカー均等活用モード
+    if settings.FORCE_WORKER_UTILIZATION and settings.DYNAMIC_CHUNK_SIZING:
+        # 理想的なチャンク数を計算（ワーカー数の最小倍数）
+        ideal_chunks = max(
+            settings.IMAGE_CONCURRENT_CHUNK_LIMIT,  # 最低でもワーカー数分
+            int(settings.IMAGE_CONCURRENT_CHUNK_LIMIT * settings.MIN_CHUNKS_PER_WORKER)  # ワーカーあたりの最小チャンク数
+        )
+        
+        # アイテム数が多い場合は効率性も考慮
+        if total_items > settings.IMAGE_CONCURRENT_CHUNK_LIMIT * 2:
+            ideal_chunks = min(ideal_chunks, total_items)
+        
+        # 最適なチャンクサイズを計算
+        optimal_chunk_size = max(1, total_items // ideal_chunks)
+        
+        logger.info(f"Force worker utilization: {total_items} items → target {ideal_chunks} chunks (chunk_size={optimal_chunk_size})")
+    else:
+        # 従来のロジック
+        if total_items <= settings.IMAGE_CONCURRENT_CHUNK_LIMIT:
+            # アイテム数がワーカー数以下の場合：1アイテム1チャンク
+            optimal_chunk_size = 1
+        else:
+            # 全ワーカーを均等に使用するためのチャンクサイズ
+            optimal_chunk_size = max(1, total_items // settings.IMAGE_CONCURRENT_CHUNK_LIMIT)
+            # 基本チャンクサイズも考慮
+            optimal_chunk_size = min(optimal_chunk_size, chunk_size)
+    
     chunks = []
     chunk_id = 1
     
@@ -37,25 +75,68 @@ def create_image_chunks(final_menu: Dict[str, List[Dict]], chunk_size: int = 3) 
             continue
             
         # カテゴリ内のアイテムをチャンクに分割
-        for i in range(0, len(items), chunk_size):
-            chunk_items = items[i:i + chunk_size]
+        for i in range(0, len(items), optimal_chunk_size):
+            chunk_items = items[i:i + optimal_chunk_size]
             
             chunk_info = {
                 "chunk_id": chunk_id,
                 "category": category,
                 "items": chunk_items,
                 "items_count": len(chunk_items),
-                "category_chunk_index": (i // chunk_size) + 1,
-                "total_category_chunks": (len(items) + chunk_size - 1) // chunk_size
+                "category_chunk_index": (i // optimal_chunk_size) + 1,
+                "total_category_chunks": (len(items) + optimal_chunk_size - 1) // optimal_chunk_size,
+                "optimal_chunk_size": optimal_chunk_size,
+                "worker_utilization_strategy": True,
+                "force_utilization": settings.FORCE_WORKER_UTILIZATION
             }
             
             chunks.append(chunk_info)
             chunk_id += 1
     
+    # 強制均等活用：チャンク数が不足している場合の追加分割
+    if settings.FORCE_WORKER_UTILIZATION and len(chunks) < settings.IMAGE_CONCURRENT_CHUNK_LIMIT:
+        original_chunks = chunks.copy()
+        chunks = []
+        chunk_id = 1
+        
+        # より細かく分割し直す
+        micro_chunk_size = max(1, total_items // settings.IMAGE_CONCURRENT_CHUNK_LIMIT)
+        
+        for category, items in final_menu.items():
+            if not items:
+                continue
+                
+            for i in range(0, len(items), micro_chunk_size):
+                chunk_items = items[i:i + micro_chunk_size]
+                
+                chunk_info = {
+                    "chunk_id": chunk_id,
+                    "category": category,
+                    "items": chunk_items,
+                    "items_count": len(chunk_items),
+                    "category_chunk_index": (i // micro_chunk_size) + 1,
+                    "total_category_chunks": (len(items) + micro_chunk_size - 1) // micro_chunk_size,
+                    "optimal_chunk_size": micro_chunk_size,
+                    "worker_utilization_strategy": True,
+                    "force_utilization": True,
+                    "micro_chunking": True
+                }
+                
+                chunks.append(chunk_info)
+                chunk_id += 1
+        
+        logger.info(f"Micro-chunking applied: {len(original_chunks)} → {len(chunks)} chunks for better worker utilization")
+    
     # 全体の総チャンク数を各チャンクに設定
     total_chunks = len(chunks)
     for chunk in chunks:
         chunk["total_chunks"] = total_chunks
+    
+    # ワーカー活用情報をログ出力
+    expected_workers = min(total_chunks, settings.IMAGE_CONCURRENT_CHUNK_LIMIT)
+    utilization_rate = (expected_workers / settings.IMAGE_CONCURRENT_CHUNK_LIMIT) * 100
+    
+    logger.info(f"Chunk creation: {total_items} items → {total_chunks} chunks (chunk_size={optimal_chunk_size}, expected_workers={expected_workers}, utilization={utilization_rate:.1f}%)")
     
     return chunks
 

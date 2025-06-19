@@ -157,7 +157,7 @@ class OpenAIDescriptionService(BaseDescriptionService):
         
         # 進行状況通知（チャンク処理中）
         if session_id:
-            from app.main import send_progress
+            from app.services.realtime import send_progress
             await send_progress(
                 session_id, 4, "active", 
                 f"🔄 Processing {category} (part {chunk_number}/{total_chunks})",
@@ -224,7 +224,7 @@ class OpenAIDescriptionService(BaseDescriptionService):
             
             # 進行状況通知（チャンク開始）
             if session_id:
-                from app.main import send_progress
+                from app.services.realtime import send_progress
                 await send_progress(
                     session_id, 4, "active", 
                     f"🔄 Starting parallel processing for {category} (chunk {chunk_number}/{total_chunks})",
@@ -260,7 +260,7 @@ class OpenAIDescriptionService(BaseDescriptionService):
         
         # 進行状況通知（カテゴリ開始）
         if session_id:
-            from app.main import send_progress
+            from app.services.realtime import send_progress
             await send_progress(
                 session_id, 4, "active", 
                 f"🍽️ Adding descriptions for {category} (parallel processing)...",
@@ -529,3 +529,27 @@ class OpenAIDescriptionService(BaseDescriptionService):
                     "processing_mode": "parallel_chunked"
                 }
             )
+
+def get_progress_function():
+    """send_progress関数を動的にインポート（循環インポート回避）"""
+    try:
+        from app.services.realtime import send_progress
+        return send_progress
+    except ImportError:
+        return None
+
+def get_progress_function_stage4():
+    """Stage4用のsend_progress関数を動的にインポート（循環インポート回避）"""
+    try:
+        from app.services.realtime import send_progress
+        return send_progress
+    except ImportError:
+        return None
+
+async def get_description_progress_function():
+    """詳細説明用のsend_progress関数を動的にインポート（循環インポート回避）"""
+    try:
+        from app.services.realtime import send_progress
+        return send_progress
+    except ImportError:
+        return None

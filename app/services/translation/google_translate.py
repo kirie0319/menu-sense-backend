@@ -170,7 +170,7 @@ class GoogleTranslateService(BaseTranslationService):
                 # 進行状況を送信（カテゴリー開始）
                 if session_id:
                     # send_progressを動的にインポート（循環インポート回避）
-                    from app.main import send_progress
+                    from app.services.realtime import send_progress
                     await send_progress(
                         session_id, 3, "active", 
                         f"🌍 Translating {japanese_category}...",

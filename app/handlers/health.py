@@ -1,34 +1,67 @@
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+"""
+ヘルスチェック関連のAPIハンドラー
+"""
 import asyncio
 import os
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+
+# サービス状態のインポート
+from app.services.ocr import get_ocr_service_status
+from app.services.category import get_category_service_status
+from app.services.translation import get_translation_service_status
+from app.services.description import get_description_service_status
+from app.services.image import get_image_service_status
 
 router = APIRouter()
 
-@router.get("/health")
+# グローバル変数の取得（リアルタイム通信サービス使用）
+def get_service_availability():
+    """サービスの可用性状態を取得"""
+    try:
+        from app.main import (
+            VISION_AVAILABLE, TRANSLATE_AVAILABLE, OPENAI_AVAILABLE, 
+            GEMINI_AVAILABLE, IMAGEN_AVAILABLE, google_credentials,
+            vision_client
+        )
+        from app.services.realtime import get_ping_pong_sessions
+        
+        return {
+            "VISION_AVAILABLE": VISION_AVAILABLE,
+            "TRANSLATE_AVAILABLE": TRANSLATE_AVAILABLE,
+            "OPENAI_AVAILABLE": OPENAI_AVAILABLE,
+            "GEMINI_AVAILABLE": GEMINI_AVAILABLE,
+            "IMAGEN_AVAILABLE": IMAGEN_AVAILABLE,
+            "google_credentials": google_credentials,
+            "vision_client": vision_client,
+            "ping_pong_sessions": get_ping_pong_sessions()
+        }
+    except ImportError as e:
+        print(f"⚠️ Service availability import error: {e}")
+        return {
+            "VISION_AVAILABLE": False,
+            "TRANSLATE_AVAILABLE": False,
+            "OPENAI_AVAILABLE": False,
+            "GEMINI_AVAILABLE": False,
+            "IMAGEN_AVAILABLE": False,
+            "google_credentials": None,
+            "vision_client": None,
+            "ping_pong_sessions": {}
+        }
+
+@router.get("/api/health")
 async def health_check():
     """ヘルスチェックエンドポイント"""
     
-    # インポートを移動 - 新しいサービス層から取得
-    from app.services.auth import get_compatibility_variables
-    from app.services.realtime import get_ping_pong_sessions
-    from app.services.ocr import get_ocr_service_status
-    from app.services.category import get_category_service_status
-    from app.services.translation import get_translation_service_status
-    from app.services.description import get_description_service_status
-    from app.services.image import get_image_service_status
-    
-    # API認証情報を取得
-    auth_vars = get_compatibility_variables()
-    VISION_AVAILABLE = auth_vars["VISION_AVAILABLE"]
-    TRANSLATE_AVAILABLE = auth_vars["TRANSLATE_AVAILABLE"]
-    OPENAI_AVAILABLE = auth_vars["OPENAI_AVAILABLE"]
-    GEMINI_AVAILABLE = auth_vars["GEMINI_AVAILABLE"]
-    IMAGEN_AVAILABLE = auth_vars["IMAGEN_AVAILABLE"]
-    google_credentials = auth_vars["google_credentials"]
-    
-    # リアルタイム通信情報を取得
-    ping_pong_sessions = get_ping_pong_sessions()
+    # サービス状態を取得
+    services = get_service_availability()
+    VISION_AVAILABLE = services["VISION_AVAILABLE"]
+    TRANSLATE_AVAILABLE = services["TRANSLATE_AVAILABLE"]
+    OPENAI_AVAILABLE = services["OPENAI_AVAILABLE"]
+    GEMINI_AVAILABLE = services["GEMINI_AVAILABLE"]
+    IMAGEN_AVAILABLE = services["IMAGEN_AVAILABLE"]
+    google_credentials = services["google_credentials"]
+    ping_pong_sessions = services["ping_pong_sessions"]
     
     # サービス状態の詳細情報
     services_detail = {}
@@ -196,20 +229,16 @@ async def health_check():
         "ping_pong_sessions": len(ping_pong_sessions)
     }
 
-@router.get("/diagnostic")
+@router.get("/api/diagnostic")
 async def diagnostic():
     """システム診断情報を返す"""
-    
-    # インポートを移動 - 新しいサービス層から取得
-    from app.services.auth import get_compatibility_variables, get_vision_client
-    
-    # API認証情報を取得
-    auth_vars = get_compatibility_variables()
-    VISION_AVAILABLE = auth_vars["VISION_AVAILABLE"]
-    TRANSLATE_AVAILABLE = auth_vars["TRANSLATE_AVAILABLE"]
-    OPENAI_AVAILABLE = auth_vars["OPENAI_AVAILABLE"]
-    google_credentials = auth_vars["google_credentials"]
-    vision_client = get_vision_client()
+    # サービス状態を取得
+    services = get_service_availability()
+    VISION_AVAILABLE = services["VISION_AVAILABLE"]
+    TRANSLATE_AVAILABLE = services["TRANSLATE_AVAILABLE"]
+    OPENAI_AVAILABLE = services["OPENAI_AVAILABLE"]
+    google_credentials = services["google_credentials"]
+    vision_client = services["vision_client"]
     
     diagnostic_info = {
         "vision_api": {
@@ -244,14 +273,12 @@ async def diagnostic():
     
     return JSONResponse(content=diagnostic_info)
 
-@router.get("/mobile-diagnostic")
+@router.get("/api/mobile-diagnostic")
 async def mobile_diagnostic(request: Request):
     """モバイル専用の詳細診断情報"""
-    
-    # インポートを移動 - 新しいサービス層から取得
-    from app.services.auth import is_vision_available
-    
-    VISION_AVAILABLE = is_vision_available()
+    # サービス状態を取得
+    services = get_service_availability()
+    VISION_AVAILABLE = services["VISION_AVAILABLE"]
     
     # リクエスト情報の詳細分析
     headers = dict(request.headers)

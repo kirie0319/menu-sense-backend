@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, List
 
-from app.services.image import generate_images, get_image_service_status, get_supported_categories, get_image_features, get_category_styles, get_supported_styles, combine_menu_with_images
+from app.services.image import get_image_service_status, get_supported_categories, get_image_features, get_category_styles, get_supported_styles, combine_menu_with_images
 from app.services.image.async_manager import get_async_manager
 
 router = APIRouter()
@@ -23,85 +23,6 @@ class ImageGenerationResponse(BaseModel):
     metadata: Dict = {}
     error: Optional[str] = None
 
-@router.post("/generate")
-async def generate_menu_images(request: ImageGenerationRequest):
-    """
-    Imagen 3で詳細説明付きメニューの画像を生成するエンドポイント（同期処理）
-    
-    Args:
-        request: 画像生成リクエスト（final_menu, session_id）
-        
-    Returns:
-        Imagen 3 画像生成結果
-    """
-    # 入力検証
-    if not request.final_menu or not isinstance(request.final_menu, dict):
-        raise HTTPException(
-            status_code=400, 
-            detail="Final menu data is required and must be a dictionary"
-        )
-    
-    # メニューデータの妥当性チェック
-    has_items = any(
-        isinstance(items, list) and len(items) > 0 
-        for items in request.final_menu.values()
-    )
-    
-    if not has_items:
-        raise HTTPException(
-            status_code=400, 
-            detail="At least one category must contain menu items with descriptions"
-        )
-    
-    # メニューアイテムの基本構造チェック
-    valid_items = True
-    for category, items in request.final_menu.items():
-        for item in items:
-            if not isinstance(item, dict):
-                valid_items = False
-                break
-            # 必須フィールドのチェック
-            required_fields = ["japanese_name", "english_name"]
-            if not all(field in item and isinstance(item[field], str) for field in required_fields):
-                valid_items = False
-                break
-        if not valid_items:
-            break
-    
-    if not valid_items:
-        raise HTTPException(
-            status_code=400, 
-            detail="Menu items must contain 'japanese_name' and 'english_name' fields"
-        )
-    
-    try:
-        # Imagen 3画像生成を実行
-        result = await generate_images(request.final_menu, request.session_id)
-        
-        # 結果を辞書形式に変換
-        response_data = result.to_dict()
-        
-        # 画像生成エンジンの追加情報
-        response_data["image_architecture"] = "imagen3_food_photography"
-        
-        # スキップされた場合も成功として扱う（画像生成はオプショナル）
-        if result.success:
-            return JSONResponse(content=response_data)
-        else:
-            # エラーの場合は詳細情報を含めて500エラー
-            raise HTTPException(
-                status_code=500, 
-                detail=response_data
-            )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Image generation processing error: {str(e)}"
-        )
-
 @router.post("/generate-async")
 async def generate_menu_images_async(request: ImageGenerationRequest):
     """
@@ -113,7 +34,7 @@ async def generate_menu_images_async(request: ImageGenerationRequest):
     Returns:
         ジョブID付きレスポンス（即座に返却）
     """
-    # 入力検証（同期版と同じ）
+    # 入力検証
     if not request.final_menu or not isinstance(request.final_menu, dict):
         raise HTTPException(
             status_code=400, 
@@ -333,10 +254,11 @@ async def get_async_manager_status():
                 "manager_status": "/api/v1/image/async-status"
             },
             "usage_info": {
-                "async_processing": "Recommended for large menus (>10 items)",
-                "sync_processing": "Suitable for small menus (<10 items)",
+                "async_processing": "Recommended for all menu sizes - Only available processing method",
+                "sync_processing": "DEPRECATED - No longer available via API endpoints",
                 "status_polling": "Check status every 5-10 seconds",
-                "job_retention": "Jobs are kept for 24 hours"
+                "job_retention": "Jobs are kept for 24 hours",
+                "migration_note": "All image generation now uses async processing for better performance"
             }
         }
         
@@ -405,9 +327,10 @@ async def get_image_generation_status():
             response["recommendations"] = [
                 "Image generation service is operational",
                 "Imagen 3 handles professional food photography generation",
-                "Use async endpoints for large menus (>10 items)",
+                "Use async endpoint (/generate-async) for all image generation",
                 "Provide well-structured menu data with descriptions for best results",
-                "Use detailed descriptions for more accurate image generation"
+                "Use detailed descriptions for more accurate image generation",
+                "Monitor job progress using /status/{job_id} endpoint"
             ]
         
         return JSONResponse(content=response)
@@ -599,143 +522,4 @@ async def combine_menu_and_images(request: dict):
             detail=f"Menu and image combination error: {str(e)}"
         )
 
-@router.post("/test")
-async def test_image_generation(request: ImageGenerationRequest):
-    """
-    画像生成のテスト用エンドポイント
-    
-    Args:
-        request: テスト用画像生成リクエスト
-        
-    Returns:
-        詳細なテスト結果と生成分析
-    """
-    # 入力検証
-    if not request.final_menu or not isinstance(request.final_menu, dict):
-        raise HTTPException(
-            status_code=400, 
-            detail="Test data is required and must be a dictionary"
-        )
-    
-    try:
-        # テスト開始時刻
-        import time
-        start_time = time.time()
-        
-        # 画像生成実行
-        result = await generate_images(request.final_menu, request.session_id)
-        
-        end_time = time.time()
-        processing_time = round(end_time - start_time, 2)
-        
-        # 入力分析
-        input_analysis = {
-            "total_categories": len(request.final_menu),
-            "categories": list(request.final_menu.keys()),
-            "total_items": sum(len(items) for items in request.final_menu.values()),
-            "items_per_category": {
-                category: len(items) 
-                for category, items in request.final_menu.items()
-            },
-            "items_with_descriptions": sum(
-                1 for items in request.final_menu.values() 
-                for item in items 
-                if item.get("description") and len(item["description"]) > 10
-            )
-        }
-        
-        # テスト結果を構築
-        test_result = {
-            "success": result.success,
-            "image_architecture": "imagen3_food_photography",
-            "processing_time_seconds": processing_time,
-            "input_analysis": input_analysis,
-            "images_generated": result.images_generated,
-            "total_images": result.total_images,
-            "image_method": result.image_method,
-            "metadata": result.metadata,
-            "performance": {}
-        }
-        
-        if result.success:
-            # 成功時の詳細分析
-            output_analysis = {
-                "categories_processed": len(result.images_generated),
-                "total_images_generated": result.total_images,
-                "successful_images": result.total_images,
-                "failed_images": result.total_items - result.total_images if result.total_items > 0 else 0,
-                "processing_completeness": "complete" if len(result.images_generated) == len(request.final_menu) else "partial"
-            }
-            
-            test_result["output_analysis"] = output_analysis
-            test_result["performance"] = {
-                "processing_speed": "fast" if processing_time < 30 else "medium" if processing_time < 120 else "slow",
-                "image_service": result.metadata.get("successful_service", "unknown"),
-                "generation_features": result.metadata.get("features", []),
-                "images_per_minute": round((result.total_images * 60) / processing_time, 2) if processing_time > 0 else 0
-            }
-            
-            # 画像生成品質評価
-            if result.image_method == "imagen3":
-                if result.total_images > 0:
-                    test_result["evaluation"] = "excellent - Imagen 3 image generation completed successfully"
-                else:
-                    skipped_reason = result.metadata.get("skipped_reason", "Unknown reason")
-                    test_result["evaluation"] = f"skipped - {skipped_reason}"
-            else:
-                test_result["evaluation"] = "unknown - check image generation method"
-            
-            # 画像内容分析
-            if result.images_generated:
-                image_analysis = {
-                    "categories_with_images": len([cat for cat, imgs in result.images_generated.items() if imgs]),
-                    "average_images_per_category": 0,
-                    "categories_analysis": {}
-                }
-                
-                total_categories_with_images = 0
-                total_images_count = 0
-                
-                for category, images in result.images_generated.items():
-                    if images:
-                        total_categories_with_images += 1
-                        successful_in_category = sum(1 for img in images if img.get("generation_success", img.get("image_url") is not None))
-                        total_images_count += len(images)
-                        
-                        image_analysis["categories_analysis"][category] = {
-                            "total_items": len(images),
-                            "successful_images": successful_in_category,
-                            "success_rate": round((successful_in_category / len(images)) * 100, 2) if len(images) > 0 else 0
-                        }
-                
-                if total_categories_with_images > 0:
-                    image_analysis["average_images_per_category"] = round(total_images_count / total_categories_with_images, 1)
-                
-                test_result["image_analysis"] = image_analysis
-            
-        else:
-            # 失敗時の分析
-            test_result["evaluation"] = "failed - image generation could not be completed"
-            test_result["error"] = result.error
-            test_result["troubleshooting"] = result.metadata.get("suggestions", [])
-            test_result["performance"] = {
-                "processing_speed": "failed",
-                "services_attempted": result.metadata.get("services_checked", []),
-                "error_type": result.metadata.get("error_type", "unknown")
-            }
-        
-        return JSONResponse(content=test_result)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "success": False,
-                "error": f"Image generation test execution error: {str(e)}",
-                "image_architecture": "imagen3_food_photography",
-                "evaluation": "error - test execution failed",
-                "processing_time_seconds": 0
-            }
-        )
+

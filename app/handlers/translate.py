@@ -1,43 +1,41 @@
-from fastapi import APIRouter, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
-import asyncio
-import uuid
+"""
+翻訳エンドポイント専用のAPIハンドラー
+"""
 import os
 import aiofiles
+from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 
 router = APIRouter()
 
-@router.post("/process")
-async def process_menu_start(file: UploadFile = File(...)):
-    """メニュー処理を開始してセッションIDを返す"""
-    if not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="File must be an image")
-    
-    # セッションIDを生成
-    session_id = str(uuid.uuid4())
-    
-    # インポートを移動 - 循環インポート回避
-    from app.services.realtime import get_session_manager
-    from app.handlers.background import process_menu_background
-    
-    # セッションを作成
-    session_manager = get_session_manager()
-    session_manager.create_session(session_id)
-    
-    # ファイル保存
-    file_path = f"{settings.UPLOAD_DIR}/{session_id}_{file.filename}"
-    async with aiofiles.open(file_path, 'wb') as f:
-        content = await file.read()
-        await f.write(content)
-    
-    # バックグラウンドでメニュー処理を開始
-    asyncio.create_task(process_menu_background(session_id, file_path))
-    
-    return JSONResponse(content={"session_id": session_id})
+# Stage関数の取得
+def get_stage_functions():
+    """Stage処理関数を取得"""
+    try:
+        from app.workflows.stages import (
+            stage1_ocr_gemini_exclusive,
+            stage2_categorize_openai_exclusive,
+            stage3_translate_with_fallback,
+            stage4_add_descriptions
+        )
+        return {
+            "stage1_ocr": stage1_ocr_gemini_exclusive,
+            "stage2_categorize": stage2_categorize_openai_exclusive,
+            "stage3_translate": stage3_translate_with_fallback,
+            "stage4_descriptions": stage4_add_descriptions
+        }
+    except ImportError as e:
+        print(f"⚠️ Stage functions import error: {e}")
+        return {
+            "stage1_ocr": None,
+            "stage2_categorize": None,
+            "stage3_translate": None,
+            "stage4_descriptions": None
+        }
 
-@router.post("/translate")
+@router.post("/api/translate")
 async def translate_menu(file: UploadFile = File(...)):
     """フロントエンド互換のメニュー翻訳エンドポイント"""
     
@@ -45,13 +43,19 @@ async def translate_menu(file: UploadFile = File(...)):
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Only image files are allowed")
     
-    # インポートを移動 - 循環インポート回避
-    from app.workflows.stages import (
-        stage1_ocr_gemini_exclusive,
-        stage2_categorize_openai_exclusive,
-        stage3_translate_with_fallback,
-        stage4_add_descriptions
-    )
+    # Stage関数を取得
+    stage_functions = get_stage_functions()
+    stage1_ocr = stage_functions["stage1_ocr"]
+    stage2_categorize = stage_functions["stage2_categorize"]
+    stage3_translate = stage_functions["stage3_translate"]
+    stage4_descriptions = stage_functions["stage4_descriptions"]
+    
+    # 必要な関数が利用できない場合
+    if not all([stage1_ocr, stage2_categorize, stage3_translate, stage4_descriptions]):
+        raise HTTPException(
+            status_code=500, 
+            detail="Required stage processing functions are not available"
+        )
     
     try:
         # ファイルを一時保存
@@ -61,7 +65,7 @@ async def translate_menu(file: UploadFile = File(...)):
             await f.write(content)
         
         # Stage 1: OCR with Gemini 2.0 Flash (Gemini専用モード)
-        stage1_result = await stage1_ocr_gemini_exclusive(file_path)
+        stage1_result = await stage1_ocr(file_path)
         
         if not stage1_result["success"]:
             raise HTTPException(status_code=500, detail=f"Text extraction error: {stage1_result['error']}")
@@ -76,19 +80,19 @@ async def translate_menu(file: UploadFile = File(...)):
             })
         
         # Stage 2: カテゴリ分類
-        stage2_result = await stage2_categorize_openai_exclusive(extracted_text)
+        stage2_result = await stage2_categorize(extracted_text)
         
         if not stage2_result["success"]:
             raise HTTPException(status_code=500, detail=f"Categorization error: {stage2_result['error']}")
         
         # Stage 3: 翻訳
-        stage3_result = await stage3_translate_with_fallback(stage2_result["categories"])
+        stage3_result = await stage3_translate(stage2_result["categories"])
         
         if not stage3_result["success"]:
             raise HTTPException(status_code=500, detail=f"Translation error: {stage3_result['error']}")
         
         # Stage 4: 詳細説明追加
-        stage4_result = await stage4_add_descriptions(stage3_result["translated_categories"])
+        stage4_result = await stage4_descriptions(stage3_result["translated_categories"])
         
         if not stage4_result["success"]:
             raise HTTPException(status_code=500, detail=f"Description error: {stage4_result['error']}")

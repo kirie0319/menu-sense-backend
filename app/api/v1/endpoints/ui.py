@@ -6,8 +6,15 @@ router = APIRouter()
 @router.get("/", response_class=HTMLResponse)
 async def read_root():
     """6段階処理のメインページ（MVP版）- Imagen 3画像生成対応"""
-    # API可用性の確認
-    from app.main import VISION_AVAILABLE, TRANSLATE_AVAILABLE, OPENAI_AVAILABLE, GEMINI_AVAILABLE, IMAGEN_AVAILABLE
+    # API可用性の確認 - 新しいサービス層から取得
+    from app.services.auth import get_compatibility_variables
+    
+    auth_vars = get_compatibility_variables()
+    VISION_AVAILABLE = auth_vars["VISION_AVAILABLE"]
+    TRANSLATE_AVAILABLE = auth_vars["TRANSLATE_AVAILABLE"]
+    OPENAI_AVAILABLE = auth_vars["OPENAI_AVAILABLE"]
+    GEMINI_AVAILABLE = auth_vars["GEMINI_AVAILABLE"]
+    IMAGEN_AVAILABLE = auth_vars["IMAGEN_AVAILABLE"]
     
     vision_status = "✅ Ready" if VISION_AVAILABLE else "❌ Not Configured"
     translate_status = "✅ Ready" if TRANSLATE_AVAILABLE else "❌ Not Configured"

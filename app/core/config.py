@@ -88,6 +88,17 @@ class Settings(BaseModel):
     IMAGE_JOB_TIMEOUT: int = int(os.getenv("IMAGE_JOB_TIMEOUT", 1800))  # 30分
     USE_REAL_IMAGE_GENERATION: bool = os.getenv("USE_REAL_IMAGE_GENERATION", "true").lower() == "true"
     
+    # 画像生成処理制限設定
+    MAX_ITEMS_PER_JOB: int = int(os.getenv("MAX_ITEMS_PER_JOB", 100))  # ジョブあたりの最大アイテム数（デフォルト: 100）
+    UNLIMITED_PROCESSING: bool = os.getenv("UNLIMITED_PROCESSING", "false").lower() == "true"  # 無制限処理モード
+    SCALE_WITH_WORKERS: bool = os.getenv("SCALE_WITH_WORKERS", "true").lower() == "true"  # ワーカー数に応じた自動スケーリング
+    ITEMS_PER_WORKER_RATIO: int = int(os.getenv("ITEMS_PER_WORKER_RATIO", 20))  # ワーカーあたりのアイテム数倍率
+    
+    # ワーカー均等活用設定
+    FORCE_WORKER_UTILIZATION: bool = os.getenv("FORCE_WORKER_UTILIZATION", "true").lower() == "true"  # 強制的にワーカーを均等活用
+    MIN_CHUNKS_PER_WORKER: float = float(os.getenv("MIN_CHUNKS_PER_WORKER", "0.8"))  # ワーカーあたりの最小チャンク数
+    DYNAMIC_CHUNK_SIZING: bool = os.getenv("DYNAMIC_CHUNK_SIZING", "true").lower() == "true"  # 動的チャンクサイズ調整
+    
     class Config:
         env_file = ".env"
 

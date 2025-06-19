@@ -12,25 +12,28 @@ async def get_progress(session_id: str):
     """Server-Sent Eventsで進行状況を送信（モバイル対応版）"""
     
     # インポートを移動 - 循環インポート回避
-    from app.main import progress_store, ping_pong_sessions
+    from app.services.realtime import get_session_manager
+    
+    session_manager = get_session_manager()
     
     async def event_generator():
         completed = False
         last_heartbeat = asyncio.get_event_loop().time()
         heartbeat_interval = settings.SSE_HEARTBEAT_INTERVAL  # ハートビート間隔（モバイル向け）
         
-        while not completed and session_id in progress_store:
+        while not completed and session_manager.session_exists(session_id):
             current_time = asyncio.get_event_loop().time()
             
             # 新しい進行状況があるか確認
-            if progress_store[session_id]:
-                progress_data = progress_store[session_id].pop(0)
-                yield f"data: {json.dumps(progress_data)}\n\n"
-                last_heartbeat = current_time
-                
-                # 完了チェック
-                if progress_data.get("stage") == 6:
-                    completed = True
+            if session_manager.has_progress(session_id):
+                progress_data = session_manager.pop_progress(session_id)
+                if progress_data:
+                    yield f"data: {json.dumps(progress_data)}\n\n"
+                    last_heartbeat = current_time
+                    
+                    # 完了チェック
+                    if progress_data.get("stage") == 6:
+                        completed = True
             else:
                 # ハートビート送信（モバイル接続維持用）
                 if current_time - last_heartbeat > heartbeat_interval:
@@ -45,13 +48,8 @@ async def get_progress(session_id: str):
                 await asyncio.sleep(0.2)
         
         # セッション終了とクリーンアップ
-        if session_id in progress_store:
-            del progress_store[session_id]
-            
-        # Ping/Pong機能の停止
-        if session_id in ping_pong_sessions:
-            ping_pong_sessions[session_id]["active"] = False
-            print(f"🏓 Ping/Pong stopped for SSE disconnect: {session_id}")
+        session_manager.delete_session(session_id)
+        print(f"🏓 Ping/Pong stopped for SSE disconnect: {session_id}")
     
     return StreamingResponse(
         event_generator(),
@@ -74,7 +72,7 @@ async def receive_pong(session_id: str):
     """クライアントからのPongを受信"""
     
     # インポートを移動 - 循環インポート回避
-    from app.main import handle_pong
+    from app.services.realtime import handle_pong
     
     success = await handle_pong(session_id)
     if success:

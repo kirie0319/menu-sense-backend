@@ -212,17 +212,13 @@ class OpenAITranslationService(BaseTranslationService):
             )
         
         try:
-            # 進行状況通知（OpenAI開始）
+            # 進行状況通知
             if session_id:
-                from app.main import send_progress
+                from app.services.realtime import send_progress
                 await send_progress(
                     session_id, 3, "active", 
-                    "🔄 Google Translate失敗 - OpenAI Function Callingフォールバックを実行中...",
-                    {
-                        "fallback_mode": True,
-                        "primary_service": "google_translate",
-                        "fallback_service": "openai_function_calling"
-                    }
+                    f"OpenAI翻訳開始: {len(categorized_data)} カテゴリ",
+                    {"openai_translation_started": True, "total_categories": len(categorized_data)}
                 )
             
             # Function Calling用のメッセージを作成
@@ -261,19 +257,16 @@ class OpenAITranslationService(BaseTranslationService):
                 
                 print(f"✅ OpenAI Translation Complete: Translated {len(translated_categories)} categories with {total_items} items")
                 
-                # 進行状況通知（完了）
+                # 最終進行状況通知
                 if session_id:
+                    from app.services.realtime import send_progress
                     await send_progress(
                         session_id, 3, "completed", 
-                        f"✅ OpenAI翻訳完了（フォールバック成功）",
+                        f"OpenAI翻訳完了: {len(translated_categories)} カテゴリ",
                         {
-                            "translatedCategories": translated_categories,
-                            "fallback_success": True,
-                            "total_items": total_items,
-                            "total_categories": len(translated_categories),
-                            "translation_method": "openai_fallback",
-                            "show_translated_menu": True,  # UIにメニュー表示を指示
-                            "completion_status": "success"
+                            "openai_translation_completed": True,
+                            "translated_categories": translated_categories,
+                            "total_categories": len(translated_categories)
                         }
                     )
                 
@@ -335,7 +328,7 @@ class OpenAITranslationService(BaseTranslationService):
             
             # 進行状況通知（エラー）
             if session_id:
-                from app.main import send_progress
+                from app.services.realtime import send_progress
                 await send_progress(
                     session_id, 3, "error", 
                     f"❌ OpenAI翻訳フォールバック失敗: {str(e)}",

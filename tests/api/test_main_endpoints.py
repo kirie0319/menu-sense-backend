@@ -10,7 +10,8 @@ from fastapi import UploadFile
 import io
 
 from app.main import app
-from app.services.ocr.base import OCRResult, OCRProvider
+from app.services.ocr.base import OCRResult
+from app.services.ocr import OCRProvider
 from app.services.category.base import CategoryResult, CategoryProvider
 
 
@@ -38,8 +39,9 @@ class TestHealthEndpoints:
         
         assert response.status_code == 200
         data = response.json()
-        assert "system_status" in data
-        assert "services" in data
+        assert "vision_api" in data
+        assert "translate_api" in data
+        assert "openai_api" in data
         assert "environment" in data
 
     def test_mobile_diagnostic_endpoint(self):
@@ -48,8 +50,9 @@ class TestHealthEndpoints:
         
         assert response.status_code == 200
         data = response.json()
-        assert "mobile_optimized" in data
-        assert "available_features" in data
+        assert "mobile_diagnostic" in data
+        assert "network_info" in data
+        assert "services_status" in data
 
 
 @pytest.mark.api
@@ -66,7 +69,7 @@ class TestTranslateEndpoint:
         test_file_content = b"fake image data"
         test_file = io.BytesIO(test_file_content)
         
-        with patch('app.main.process_menu_background') as mock_process:
+        with patch('app.handlers.background.process_menu_background') as mock_process:
             # process_menu_background が正常に動作することをモック
             mock_process.return_value = asyncio.create_task(
                 asyncio.coroutine(lambda: None)()
@@ -132,7 +135,7 @@ class TestProgressEndpoint:
         
         with self.client.stream("GET", f"/api/progress/{session_id}") as response:
             assert response.status_code == 200
-            assert response.headers["content-type"] == "text/plain"
+            assert "text/event-stream" in response.headers["content-type"]
             
             # 最初の数行を読み取り
             lines = []
@@ -149,15 +152,15 @@ class TestProgressEndpoint:
         session_id = "test-session-existing"
         
         # progress_storeに事前データを追加
-        from app.main import progress_store
-        progress_store[session_id] = [
-            {
-                "stage": 1,
-                "status": "completed",
-                "message": "OCR完了",
-                "timestamp": 1234567890
-            }
-        ]
+        from app.services.realtime import get_session_manager
+        session_manager = get_session_manager()
+        session_manager.create_session(session_id)
+        session_manager.add_progress(session_id, {
+            "stage": 1,
+            "status": "completed",
+            "message": "OCR完了",
+            "timestamp": 1234567890
+        })
         
         with self.client.stream("GET", f"/api/progress/{session_id}") as response:
             assert response.status_code == 200
@@ -259,8 +262,9 @@ class TestEndToEndWorkflow:
             time.sleep(0.1)  # 少し待つ
             
             # プロセスが開始されていることを確認
-            from app.main import progress_store
-            assert session_id in progress_store or len(progress_store) > 0
+            from app.services.realtime import get_session_manager
+            session_manager = get_session_manager()
+            assert session_manager.session_exists(session_id) or len(session_manager.progress_store) > 0
 
 
 @pytest.mark.api
