@@ -675,74 +675,198 @@ async def stage4_add_descriptions(translated_data: dict, session_id: str = None)
         
         return error_result
 
-# Stage 5: 画像生成 (新サービス層使用)
+# Stage 5: 画像生成 (Celery + Redis 非同期処理版)
 async def stage5_generate_images(final_menu: dict, session_id: str = None) -> dict:
-    """Stage 5: Imagen 3画像生成サービスで画像を生成（新サービス層使用）"""
-    print("🎨 Stage 5: Generating images with Imagen 3 service...")
+    """Stage 5: Celery + Redis非同期処理でImagen 3画像を生成"""
+    print("🎨 Stage 5: Starting async image generation with Celery + Redis...")
     
     try:
-        # 新しい画像生成サービスを使用
-        result = await image_generate_images(final_menu, session_id)
+        from app.services.image.async_manager import get_async_manager
         
-        # レガシー形式に変換
-        legacy_result = {
-            "stage": 5,
-            "success": result.success,
-            "images_generated": result.images_generated,
-            "total_images": result.total_images,
-            "total_items": result.total_items,
-            "image_method": result.image_method,
-            "image_architecture": "imagen3_food_photography"
-        }
+        # AsyncImageManagerを取得
+        async_manager = get_async_manager()
         
-        if result.success:
-            # 成功時のメタデータを追加
-            legacy_result.update({
-                "image_service": result.metadata.get("provider", "Imagen 3"),
-                "model": result.metadata.get("model", "imagen-3.0-generate-002"),
-                "features": result.metadata.get("features", [])
-            })
-            
-            # スキップされた場合の処理
-            if result.metadata.get("skipped_reason"):
-                legacy_result["skipped_reason"] = result.metadata["skipped_reason"]
-                print(f"⚠️ Imagen 3 image generation skipped: {result.metadata['skipped_reason']}")
-            else:
-                print(f"✅ Imagen 3 Image Generation successful - {result.total_images} images generated")
-            
-        else:
-            # エラー時の詳細情報を追加
-            legacy_result.update({
-                "error": result.error,
-                "detailed_error": result.metadata
-            })
-            
-            print(f"❌ Imagen 3 Image Generation failed: {result.error}")
+        # 非同期画像生成を開始
+        success, message, job_id = async_manager.start_async_generation(final_menu, session_id)
         
-        return legacy_result
+        if not success or not job_id:
+            # 非同期処理開始に失敗した場合は従来の同期処理にフォールバック
+            print(f"⚠️ Async generation failed ({message}), falling back to sync processing...")
+            result = await image_generate_images(final_menu, session_id)
+            
+            return {
+                "stage": 5,
+                "success": result.success,
+                "images_generated": result.images_generated,
+                "total_images": result.total_images,
+                "total_items": result.total_items,
+                "image_method": result.image_method + "_sync_fallback",
+                "image_architecture": "imagen3_food_photography_sync",
+                "fallback_reason": message
+            }
+        
+        print(f"🚀 Async image generation started: job_id={job_id}")
+        
+        # ジョブ完了まで監視
+        return await monitor_async_image_job(job_id, session_id, final_menu)
         
     except Exception as e:
-        print(f"❌ Stage 5 Image Service Failed: {e}")
+        print(f"❌ Stage 5 Async Image Generation Failed: {e}")
         
-        error_result = {
+        # 例外が発生した場合も同期処理にフォールバック
+        try:
+            print("⚠️ Exception occurred, attempting sync fallback...")
+            result = await image_generate_images(final_menu, session_id)
+            
+            return {
+                "stage": 5,
+                "success": result.success,
+                "images_generated": result.images_generated,
+                "total_images": result.total_images,
+                "total_items": result.total_items,
+                "image_method": result.image_method + "_exception_fallback",
+                "image_architecture": "imagen3_food_photography_sync",
+                "fallback_reason": f"Exception in async processing: {str(e)}"
+            }
+        except Exception as sync_error:
+            # 同期処理も失敗した場合はエラーレスポンス
+            error_result = {
+                "stage": 5,
+                "success": False,
+                "error": f"画像生成サービスでエラーが発生しました: {str(e)}",
+                "image_architecture": "imagen3_async_with_sync_fallback",
+                "detailed_error": {
+                    "error_type": "both_async_and_sync_failed",
+                    "async_error": str(e),
+                    "sync_error": str(sync_error),
+                    "suggestions": [
+                        "Redisサーバーが起動しているか確認してください",
+                        "Celeryワーカーが起動しているか確認してください",
+                        "GEMINI_API_KEYが正しく設定されているか確認してください",
+                        "IMAGE_GENERATION_ENABLEDが有効になっているか確認してください"
+                    ]
+                },
+                "images_generated": {}
+            }
+            
+            return error_result
+
+async def monitor_async_image_job(job_id: str, session_id: str = None, final_menu: dict = None) -> dict:
+    """非同期画像生成ジョブを監視し、完了まで待機"""
+    import asyncio
+    from app.services.image.async_manager import get_async_manager
+    
+    async_manager = get_async_manager()
+    start_time = asyncio.get_event_loop().time()
+    last_progress = -1
+    monitoring_interval = 2.0  # 2秒間隔でチェック
+    max_wait_time = 300  # 最大5分待機
+    
+    print(f"📊 Starting job monitoring: job_id={job_id}")
+    
+    try:
+        while asyncio.get_event_loop().time() - start_time < max_wait_time:
+            # ジョブステータスを取得
+            status_info = async_manager.get_job_status(job_id)
+            
+            if not status_info.get("found", False):
+                print(f"❌ Job not found: {job_id}")
+                break
+            
+            current_status = status_info.get("status", "unknown")
+            current_progress = status_info.get("progress_percent", 0)
+            
+            # 進行状況が変化した場合のみ通知
+            if current_progress != last_progress:
+                elapsed = int(asyncio.get_event_loop().time() - start_time)
+                
+                # 進行状況をクライアントに通知
+                if session_id:
+                    processing_info = status_info.get("processing_info", {})
+                    await send_progress(
+                        session_id, 5, "active",
+                        f"🎨 非同期画像生成中: {current_progress}% (経過時間: {elapsed}秒)",
+                        {
+                            "job_id": job_id,
+                            "progress_percent": current_progress,
+                            "status": current_status,
+                            "async_processing": True,
+                            "processing_info": {
+                                "completed_chunks": status_info.get("completed_chunks", 0),
+                                "total_chunks": status_info.get("total_chunks", 0),
+                                "total_items": status_info.get("total_items", 0),
+                                "elapsed_time": elapsed
+                            }
+                        }
+                    )
+                
+                print(f"📊 [{elapsed}s] Job {job_id}: {current_status} - {current_progress}%")
+                last_progress = current_progress
+            
+            # 完了チェック
+            if current_status in ["completed", "partial_completed", "failed"]:
+                print(f"✅ Job completed: {job_id} - Status: {current_status}")
+                
+                # 結果を構築
+                if current_status in ["completed", "partial_completed"]:
+                    images_generated = status_info.get("images_generated", {})
+                    total_images = status_info.get("total_images", 0)
+                    total_items = sum(len(items) for items in final_menu.values()) if final_menu else status_info.get("total_items", 0)
+                    
+                    # 成功率計算
+                    success_rate = (total_images / total_items * 100) if total_items > 0 else 0
+                    
+                    return {
+                        "stage": 5,
+                        "success": True,
+                        "images_generated": images_generated,
+                        "total_images": total_images,
+                        "total_items": total_items,
+                        "image_method": "celery_async_imagen3",
+                        "image_architecture": "imagen3_async_food_photography",
+                        "job_id": job_id,
+                        "processing_time": int(asyncio.get_event_loop().time() - start_time),
+                        "success_rate": round(success_rate, 2),
+                        "async_processing_completed": True
+                    }
+                else:
+                    # 失敗
+                    return {
+                        "stage": 5,
+                        "success": False,
+                        "error": f"Async image generation failed: {current_status}",
+                        "job_id": job_id,
+                        "image_architecture": "imagen3_async_food_photography",
+                        "processing_time": int(asyncio.get_event_loop().time() - start_time),
+                        "images_generated": {}
+                    }
+            
+            # 次のチェックまで待機
+            await asyncio.sleep(monitoring_interval)
+        
+        # タイムアウト
+        print(f"⏰ Job monitoring timeout: {job_id}")
+        return {
             "stage": 5,
             "success": False,
-            "error": f"画像生成サービスでエラーが発生しました: {str(e)}",
-            "image_architecture": "imagen3_food_photography",
-            "detailed_error": {
-                "error_type": "image_service_error",
-                "original_error": str(e),
-                "suggestions": [
-                    "GEMINI_API_KEYが正しく設定されているか確認してください",
-                    "IMAGE_GENERATION_ENABLEDが有効になっているか確認してください",
-                    "Imagen 3 APIの利用状況・クォータを確認してください",
-                    "google-genai、pillowパッケージがインストールされているか確認してください"
-                ]
-            },
+            "error": f"Image generation timeout after {max_wait_time} seconds",
+            "job_id": job_id,
+            "image_architecture": "imagen3_async_food_photography",
+            "timeout": True,
             "images_generated": {}
         }
         
-        return error_result
+    except Exception as e:
+        print(f"❌ Job monitoring error: {e}")
+        return {
+            "stage": 5,
+            "success": False,
+            "error": f"Job monitoring failed: {str(e)}",
+            "job_id": job_id,
+            "image_architecture": "imagen3_async_food_photography",
+            "monitoring_error": True,
+            "images_generated": {}
+        }
 
 # 注意: create_image_prompt と combine_menu_with_images 関数は画像生成サービス層に移動されました
 # これらの機能は app/services/image で管理されます

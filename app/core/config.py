@@ -77,6 +77,17 @@ class Settings(BaseModel):
     IMAGE_GENERATION_ENABLED: bool = True  # 一時的に無効化（高速化のため）
     IMAGE_RATE_LIMIT_SLEEP: float = 2.0  # Imagen 3のレート制限対策
     
+    # Celery/Redis設定
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    CELERY_BROKER_URL: str = REDIS_URL
+    CELERY_RESULT_BACKEND: str = REDIS_URL
+    
+    # 非同期画像生成設定
+    ASYNC_IMAGE_ENABLED: bool = os.getenv("ASYNC_IMAGE_ENABLED", "true").lower() == "true"
+    MAX_IMAGE_WORKERS: int = int(os.getenv("MAX_IMAGE_WORKERS", 3))
+    IMAGE_JOB_TIMEOUT: int = int(os.getenv("IMAGE_JOB_TIMEOUT", 1800))  # 30分
+    USE_REAL_IMAGE_GENERATION: bool = os.getenv("USE_REAL_IMAGE_GENERATION", "true").lower() == "true"
+    
     class Config:
         env_file = ".env"
 
