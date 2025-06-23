@@ -22,3 +22,6 @@ google-api-core==2.18.0
 celery
 redis
 psutil
+boto3
+botocore
+sseclient-py

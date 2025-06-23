@@ -120,4 +120,10 @@ static/
 *.gif
 *.bmp
 *.tiff
-.DS_Store 
+.DS_Store
+
+# Security - API keys and credentials
+google_credentials.json
+service-account-key.json
+*.pem
+*.key 

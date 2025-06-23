@@ -240,6 +240,10 @@ async def diagnostic():
     google_credentials = services["google_credentials"]
     vision_client = services["vision_client"]
     
+    # 統一認証システムから認証状態を取得
+    from app.services.auth.unified_auth import get_auth_status
+    auth_status = get_auth_status()
+    
     diagnostic_info = {
         "vision_api": {
             "available": VISION_AVAILABLE,
@@ -254,9 +258,14 @@ async def diagnostic():
             "error": None if OPENAI_AVAILABLE else "OpenAI API not available"
         },
         "environment": {
-            "google_credentials_available": google_credentials is not None,
+            "google_credentials_available": auth_status["available"],
             "google_credentials_json_env": "GOOGLE_CREDENTIALS_JSON" in os.environ,
             "openai_api_key_env": "OPENAI_API_KEY" in os.environ
+        },
+        "authentication": {
+            "method": auth_status["method"],
+            "source": auth_status["source"],
+            "available": auth_status["available"]
         }
     }
     

@@ -1,14 +1,14 @@
 import json
 import asyncio
-from typing import Optional
+from typing import Optional, Dict
 from concurrent.futures import ThreadPoolExecutor
 
 try:
     import openai
-    from openai import AsyncOpenAI
+    from openai import OpenAI
 except ImportError:
     openai = None
-    AsyncOpenAI = None
+    OpenAI = None
 
 from app.core.config import settings
 from .base import BaseDescriptionService, DescriptionResult, DescriptionProvider
@@ -27,12 +27,12 @@ class OpenAIDescriptionService(BaseDescriptionService):
     def _initialize_client(self):
         """OpenAI APIクライアントを初期化"""
         try:
-            if not openai or not AsyncOpenAI:
+            if not openai or not OpenAI:
                 print("❌ openai package not installed. Install with: pip install openai")
                 return
                 
             if settings.OPENAI_API_KEY:
-                self.client = AsyncOpenAI(
+                self.client = OpenAI(
                     api_key=settings.OPENAI_API_KEY,
                     timeout=settings.OPENAI_TIMEOUT,
                     max_retries=settings.OPENAI_MAX_RETRIES
@@ -49,14 +49,93 @@ class OpenAIDescriptionService(BaseDescriptionService):
         """サービスが利用可能かチェック"""
         return self.client is not None and bool(settings.OPENAI_API_KEY)
     
-    async def call_openai_with_retry(self, messages, max_retries=2):
+    def generate_description(
+        self,
+        japanese_name: str,
+        english_name: str,
+        category: str = "Other"
+    ) -> Dict:
+        """
+        個別アイテムの詳細説明を生成（Phase 2統合処理用）
+        
+        Args:
+            japanese_name: 日本語名
+            english_name: 英語名
+            category: カテゴリ
+            
+        Returns:
+            Dict: 説明生成結果
+        """
+        if not self.is_available():
+            # フォールバック説明
+            fallback_description = f"Traditional Japanese {category.lower()} with authentic flavors and high-quality ingredients."
+            return {
+                'success': True,
+                'description': fallback_description,
+                'service': 'Fallback Description'
+            }
+        
+        try:
+            # 個別アイテム用プロンプト作成
+            prompt = f"""Please generate a detailed English description for this Japanese dish for foreign tourists:
+
+Japanese Name: {japanese_name}
+English Name: {english_name}
+Category: {category}
+
+Requirements:
+1. Create a detailed description in English (30-80 words)
+2. Include cooking method, key ingredients, and flavor profile
+3. Add cultural context that tourists would find interesting
+4. Use tourist-friendly language that's easy to understand
+5. Make it appealing and informative
+
+Examples of good descriptions:
+- "Traditional Japanese grilled chicken skewers, marinated in savory tare sauce and grilled over charcoal for a smoky flavor"
+- "Light and crispy battered and deep-fried seafood and vegetables, served with tentsuyu dipping sauce"
+
+Please respond with only the description text, no additional formatting or explanation."""
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            
+            # OpenAI API呼び出し
+            response = self.call_openai_with_retry(messages, max_retries=2)
+            description = response.choices[0].message.content.strip()
+            
+            # 説明をクリーンアップ
+            description = self.clean_description_text(description)
+            
+            return {
+                'success': True,
+                'description': description,
+                'service': 'OpenAI Description'
+            }
+            
+        except Exception as e:
+            print(f"❌ Individual description generation failed: {str(e)}")
+            # エラー時のフォールバック
+            fallback_description = f"Delicious {english_name} - a traditional {category.lower()} dish with authentic Japanese flavors."
+            return {
+                'success': True,
+                'description': fallback_description,
+                'service': 'Error Fallback Description'
+            }
+    
+    def call_openai_with_retry(self, messages, max_retries=2):
         """指数バックオフ付きでOpenAI APIを呼び出すリトライ関数（チャンク処理用）"""
         if not self.is_available():
             raise Exception("OpenAI API is not available")
         
+        import time
+        
         for attempt in range(max_retries + 1):
             try:
-                response = await self.client.chat.completions.create(
+                response = self.client.chat.completions.create(
                     model=settings.OPENAI_MODEL,
                     messages=messages
                 )
@@ -68,7 +147,7 @@ class OpenAIDescriptionService(BaseDescriptionService):
                 
                 wait_time = settings.RETRY_BASE_DELAY ** attempt
                 print(f"⏳ Rate limit hit, waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}")
-                await asyncio.sleep(wait_time)
+                time.sleep(wait_time)
                 
             except openai.APITimeoutError as e:
                 if attempt == max_retries:
@@ -76,7 +155,7 @@ class OpenAIDescriptionService(BaseDescriptionService):
                 
                 wait_time = settings.RETRY_BASE_DELAY ** attempt
                 print(f"⏳ API timeout, waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}")
-                await asyncio.sleep(wait_time)
+                time.sleep(wait_time)
                 
             except openai.APIConnectionError as e:
                 if attempt == max_retries:
@@ -84,7 +163,7 @@ class OpenAIDescriptionService(BaseDescriptionService):
                 
                 wait_time = settings.RETRY_BASE_DELAY ** attempt
                 print(f"⏳ Connection error, waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}")
-                await asyncio.sleep(wait_time)
+                time.sleep(wait_time)
                 
             except Exception as e:
                 # その他のエラーは即座に失敗

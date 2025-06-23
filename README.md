@@ -218,6 +218,11 @@ python test_google_search.py --interactive
 
 ## 🔧 Setup & Configuration
 
+### 🌟 統一認証システム
+
+本アプリケーションは、複数の認証方法を一元化した統一認証システムを採用しています。
+詳細な設定とトラブルシューティングについては [統一認証システムガイド](UNIFIED_AUTH_GUIDE.md) をご覧ください。
+
 ### Google Vision API Setup (Stage 1 OCR Required)
 
 Stage1のOCR処理には**Google Vision API**が必要です：
@@ -254,12 +259,86 @@ Stage1のOCR処理には**Google Vision API**が必要です：
    ```
 
 6. **環境変数設定**
+
+   #### Option 1: AWS Secrets Manager（推奨 - 本番環境）
+   ```bash
+   # .envファイルに追加
+   USE_AWS_SECRETS_MANAGER=true
+   AWS_REGION=us-east-1
+   AWS_SECRET_NAME=prod/menu-sense/google-credentials
+   
+   # AWS認証情報（プロダクション環境用）
+   AWS_ACCESS_KEY_ID=your_aws_access_key_id_here
+   AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key_here
+   # AWS_SESSION_TOKEN=your_aws_session_token_here  # IAM Role使用時のみ必要
+   
+   # Google認証情報をAWS Secrets Managerに保存
+   aws secretsmanager create-secret \
+       --name "prod/menu-sense/google-credentials" \
+       --description "Google Cloud credentials for Menu Sense" \
+       --secret-string file://key.json
+   ```
+
+   #### Option 2: 直接環境変数（開発環境）
    ```bash
    # .envファイルに追加
    GOOGLE_CREDENTIALS_JSON='{"type":"service_account","project_id":"your-project-id",...}'
    # または
    GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
    ```
+
+### AWS Secrets Manager設定手順
+
+1. **AWS CLI設定**
+   ```bash
+   # AWS認証情報を設定
+   aws configure
+   # または環境変数で設定
+   export AWS_ACCESS_KEY_ID=your_access_key
+   export AWS_SECRET_ACCESS_KEY=your_secret_key
+   ```
+
+2. **Secrets ManagerにGoogle認証情報を保存**
+   ```bash
+   # JSON文字列として保存
+   aws secretsmanager create-secret \
+       --name "prod/menu-sense/google-credentials" \
+       --description "Google Cloud credentials for Menu Sense" \
+       --secret-string file://service-account-key.json
+   ```
+
+3. **接続テスト**
+   ```bash
+   # AWS Secrets Manager接続をテスト
+   python test_aws_secrets.py
+   ```
+
+### プロダクション環境での運用
+
+#### Railway/Herokuでの環境変数設定
+```bash
+# Railway Dashboard または Heroku Config Vars で設定
+USE_AWS_SECRETS_MANAGER=true
+AWS_REGION=us-east-1
+AWS_SECRET_NAME=prod/menu-sense/google-credentials
+AWS_ACCESS_KEY_ID=your_aws_access_key_id_here
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key_here
+```
+
+#### AWS ECS/EC2での運用
+AWS ECS や EC2 上で運用する場合は、IAM Roleを使用することを推奨します：
+```bash
+# IAM Role使用時は認証情報を環境変数に設定する必要なし
+USE_AWS_SECRETS_MANAGER=true
+AWS_REGION=us-east-1
+AWS_SECRET_NAME=prod/menu-sense/google-credentials
+```
+
+#### セキュリティのベストプラクティス
+- ✅ **最小権限原則**: IAMユーザーには`secretsmanager:GetSecretValue`権限のみ付与
+- ✅ **認証情報のローテーション**: 定期的にAWS認証情報を更新
+- ✅ **IAM Role使用**: 可能な限りIAM Roleを使用（EC2/ECS/Lambda等）
+- ✅ **VPC設定**: プロダクション環境では適切なVPC設定を実施
 
 ### OpenAI API Setup (Stage 2-4 Required)
 

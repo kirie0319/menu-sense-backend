@@ -198,7 +198,10 @@ def mock_settings(monkeypatch):
     test_settings = {
         "GEMINI_API_KEY": "test-gemini-key",
         "OPENAI_API_KEY": "test-openai-key",
-        "GOOGLE_CREDENTIALS_JSON": "{}",
+        "GOOGLE_CREDENTIALS_JSON": '{"type":"service_account","project_id":"test-project"}',
+        "USE_AWS_SECRETS_MANAGER": "false",
+        "AWS_REGION": "us-east-1",
+        "AWS_SECRET_NAME": "test/menu-sense/credentials",
         "APP_TITLE": "Test Menu Sensor",
         "APP_VERSION": "test",
         "DEBUG": True

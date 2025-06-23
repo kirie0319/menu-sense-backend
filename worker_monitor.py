@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Celeryワーカー リアルタイム監視ダッシュボード
@@ -185,6 +186,9 @@ class WorkerMonitor:
                 if workers.get('active_tasks'):
                     total_active = sum(len(tasks) for tasks in workers['active_tasks'].values())
                     print(f"  ⚡ 実行中タスク数: {self.colored_text(str(total_active), 'yellow')}")
+                    
+                    # キュー別負荷詳細表示
+                    self.display_queue_performance(workers)
             else:
                 print(f"  ⚠️ ワーカーが見つかりません")
     
@@ -250,42 +254,199 @@ class WorkerMonitor:
         print(f"  🚀 無制限処理モード: {self.colored_text(str(config['unlimited_processing']), 'green' if config['unlimited_processing'] else 'yellow')}")
         print(f"  ⚡ カテゴリ並列処理: {self.colored_text(str(config['enable_category_parallel']), 'green' if config['enable_category_parallel'] else 'yellow')}")
     
+    def display_queue_performance(self, workers):
+        """キュー別負荷状況を詳細表示"""
+        print(self.colored_text("\n🎯 キュー別負荷状況:", 'cyan'))
+        
+        if not workers.get('active_tasks') and not workers.get('stats'):
+            print("  📊 データが不足しています")
+            return
+        
+        # キュー別アクティブタスク集計
+        queue_tasks = {}
+        worker_info = {}
+        
+        # アクティブタスクをキュー別に分類
+        if workers.get('active_tasks'):
+            for worker_name, tasks in workers['active_tasks'].items():
+                worker_info[worker_name] = {
+                    'active_tasks': len(tasks),
+                    'tasks': tasks
+                }
+                
+                for task in tasks:
+                    # タスク名からキューを推定
+                    queue_name = self.get_queue_from_task(task.get('name', ''))
+                    if queue_name not in queue_tasks:
+                        queue_tasks[queue_name] = {'active': 0, 'workers': set()}
+                    queue_tasks[queue_name]['active'] += 1
+                    queue_tasks[queue_name]['workers'].add(worker_name)
+        
+        # 戦略的キューの重要度別表示
+        high_priority_queues = ['translation_queue', 'description_queue', 'item_processing_queue']
+        medium_priority_queues = ['ocr_queue', 'categorization_queue']
+        low_priority_queues = ['image_queue', 'pipeline_queue', 'default']
+        
+        # 高優先度キュー
+        print(f"    🔥 {self.colored_text('高優先度キュー (並列処理)', 'red')}")
+        for queue in high_priority_queues:
+            self.display_queue_status(queue, queue_tasks.get(queue, {'active': 0, 'workers': set()}))
+        
+        # 中優先度キュー
+        print(f"    📝 {self.colored_text('中優先度キュー (シーケンシャル)', 'yellow')}")
+        for queue in medium_priority_queues:
+            self.display_queue_status(queue, queue_tasks.get(queue, {'active': 0, 'workers': set()}))
+        
+        # 低優先度キュー
+        print(f"    ⭐ {self.colored_text('低優先度キュー (その他)', 'blue')}")
+        for queue in low_priority_queues:
+            self.display_queue_status(queue, queue_tasks.get(queue, {'active': 0, 'workers': set()}))
+        
+        # ワーカー詳細情報
+        if worker_info:
+            print(f"\n📋 {self.colored_text('ワーカー詳細:', 'magenta')}")
+            for worker_name, info in worker_info.items():
+                active_count = info['active_tasks']
+                status_color = 'green' if active_count == 0 else 'yellow' if active_count <= 2 else 'red'
+                print(f"    🔧 {worker_name}: {self.colored_text(f'{active_count} アクティブタスク', status_color)}")
+    
+    def get_queue_from_task(self, task_name):
+        """タスク名からキュー名を推定"""
+        task_queue_mapping = {
+            'translation_tasks': 'translation_queue',
+            'description_tasks': 'description_queue',
+            'item_processing_tasks': 'item_processing_queue',
+            'ocr_tasks': 'ocr_queue',
+            'categorization_tasks': 'categorization_queue',
+            'image_tasks': 'image_queue',
+            'pipeline_tasks': 'pipeline_queue'
+        }
+        
+        for task_prefix, queue_name in task_queue_mapping.items():
+            if task_prefix in task_name:
+                return queue_name
+        
+        return 'default'
+    
+    def display_queue_status(self, queue_name, queue_info):
+        """個別キューの状況を表示"""
+        active_tasks = queue_info['active']
+        worker_count = len(queue_info['workers'])
+        
+        # キューの状態に応じた色分け
+        if active_tasks == 0:
+            status_color = 'green'
+            status = 'アイドル'
+        elif active_tasks <= 2:
+            status_color = 'yellow'
+            status = '軽負荷'
+        else:
+            status_color = 'red'
+            status = '高負荷'
+        
+        workers_text = f"{worker_count}ワーカー" if worker_count > 0 else "未割り当て"
+        print(f"      ├─ {queue_name}: {self.colored_text(f'{active_tasks}タスク', status_color)} ({status}) | {workers_text}")
+
+    def display_log_status(self, current_time, celery_info, system_info, redis_info):
+        """ログ形式でステータスを表示"""
+        
+        # ワーカー状況のサマリー
+        worker_summary = "❌ No workers"
+        active_tasks = 0
+        
+        if 'error' not in celery_info:
+            workers = celery_info.get('workers', {})
+            worker_count = workers.get('worker_count', 0)
+            
+            if worker_count > 0:
+                if workers.get('active_tasks'):
+                    active_tasks = sum(len(tasks) for tasks in workers['active_tasks'].values())
+                worker_summary = f"✅ {worker_count} workers, {active_tasks} tasks"
+            else:
+                worker_summary = "⚠️ 0 workers"
+        
+        # システム状況のサマリー
+        system_summary = "❌ System info unavailable"
+        if 'error' not in system_info:
+            cpu = system_info.get('cpu_percent', 0)
+            mem = system_info.get('memory_percent', 0)
+            celery_procs = len(system_info.get('celery_processes', []))
+            
+            cpu_icon = '🟢' if cpu < 50 else '🟡' if cpu < 80 else '🔴'
+            mem_icon = '🟢' if mem < 50 else '🟡' if mem < 80 else '🔴'
+            
+            system_summary = f"{cpu_icon} CPU {cpu:.1f}% {mem_icon} MEM {mem:.1f}% 🔧 {celery_procs} procs"
+        
+        # Redis状況のサマリー
+        redis_summary = "❌ Redis unavailable"
+        if redis_info.get('connected', False):
+            mem_used = redis_info.get('memory_used', 'N/A')
+            clients = redis_info.get('connected_clients', 'N/A')
+            redis_summary = f"✅ Redis: {mem_used}, {clients} clients"
+        
+        # ログエントリを出力
+        log_entry = f"[{current_time}] {worker_summary} | {system_summary} | {redis_summary}"
+        print(log_entry)
+        
+        # キュー詳細（アクティブタスクがある場合のみ）
+        if active_tasks > 0 and 'error' not in celery_info:
+            workers = celery_info.get('workers', {})
+            if workers.get('active_tasks'):
+                queue_details = self._get_queue_summary(workers)
+                if queue_details:
+                    print(f"    📊 Queue Activity: {queue_details}")
+    
+    def _get_queue_summary(self, workers):
+        """キュー活動のサマリーを取得"""
+        queue_tasks = {}
+        
+        if workers.get('active_tasks'):
+            for worker_name, tasks in workers['active_tasks'].items():
+                for task in tasks:
+                    queue_name = self.get_queue_from_task(task.get('name', ''))
+                    if queue_name not in queue_tasks:
+                        queue_tasks[queue_name] = 0
+                    queue_tasks[queue_name] += 1
+        
+        if queue_tasks:
+            queue_summary = []
+            for queue, count in queue_tasks.items():
+                queue_summary.append(f"{queue}({count})")
+            return ", ".join(queue_summary)
+        
+        return ""
+
     def display_performance_tips(self):
         """パフォーマンス改善のヒントを表示"""
         print(self.colored_text("\n💡 パフォーマンス最適化のヒント:", 'magenta'))
-        print("  🔧 最適化設定を適用: python apply_optimization.py --apply")
-        print("  ⚡ Celeryワーカー起動: celery -A app.tasks.celery_app worker --concurrency=6 --loglevel=info")
+        print("  🚀 最適化ワーカー起動: ./start_workers_optimized.sh")
+        print("  🔧 従来のワーカー起動: celery -A app.tasks.celery_app worker --concurrency=6 --loglevel=info")
         print("  📊 詳細テスト実行: python apply_optimization.py --test")
-        print("  🚀 全体最適化: python apply_optimization.py --all")
+        print("  🎯 リアルタイム監視: python worker_monitor.py --monitor")
     
     def run_monitor(self):
         """監視を実行"""
         try:
+            print(self.colored_text("🚀 Celeryワーカー リアルタイム監視開始", 'bold'))
+            print(self.colored_text("💡 ログ形式で継続的に監視します", 'cyan'))
+            print(self.colored_text("⌨️ 終了するには Ctrl+C を押してください\n", 'white'))
+            
             while self.running:
-                self.clear_screen()
+                current_time = datetime.now().strftime("%H:%M:%S")
                 
                 # データ収集
                 celery_info = self.get_celery_info()
                 system_info = self.get_system_info()
                 redis_info = self.get_redis_info()
-                config_info = self.get_backend_config()
                 
-                # 表示
-                self.display_header()
-                self.display_celery_status(celery_info)
-                self.display_system_status(system_info)
-                self.display_redis_status(redis_info)
-                self.display_backend_config(config_info)
-                self.display_performance_tips()
+                # ログ形式で表示
+                self.display_log_status(current_time, celery_info, system_info, redis_info)
                 
-                print(self.colored_text("\n⌨️ 終了するには Ctrl+C を押してください", 'white'))
-                print(self.colored_text("=" * 80, 'cyan'))
-                
-                # 2秒間隔で更新
-                time.sleep(2)
+                # 5秒間隔で更新
+                time.sleep(5)
                 
         except KeyboardInterrupt:
-            print(self.colored_text("\n\n👋 監視を終了します...", 'yellow'))
+            print(self.colored_text(f"\n👋 {datetime.now().strftime('%H:%M:%S')} - 監視を終了します...", 'yellow'))
             self.running = False
 
 class PerformanceBenchmark:

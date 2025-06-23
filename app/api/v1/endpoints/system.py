@@ -200,15 +200,18 @@ async def health_check():
 async def diagnostic():
     """システム診断情報を返す"""
     
-    # インポートを移動 - 新しいサービス層から取得
+    # 統一認証システムと従来システムからデータを取得
     from app.services.auth import get_compatibility_variables, get_vision_client
+    from app.services.auth.unified_auth import get_auth_status, get_auth_troubleshooting
+    from app.core.config import settings
     
     # API認証情報を取得
     auth_vars = get_compatibility_variables()
+    auth_status = get_auth_status()
+    
     VISION_AVAILABLE = auth_vars["VISION_AVAILABLE"]
     TRANSLATE_AVAILABLE = auth_vars["TRANSLATE_AVAILABLE"]
     OPENAI_AVAILABLE = auth_vars["OPENAI_AVAILABLE"]
-    google_credentials = auth_vars["google_credentials"]
     vision_client = get_vision_client()
     
     diagnostic_info = {
@@ -225,9 +228,18 @@ async def diagnostic():
             "error": None if OPENAI_AVAILABLE else "OpenAI API not available"
         },
         "environment": {
-            "google_credentials_available": google_credentials is not None,
+            "google_credentials_available": auth_status["available"],
             "google_credentials_json_env": "GOOGLE_CREDENTIALS_JSON" in os.environ,
-            "openai_api_key_env": "OPENAI_API_KEY" in os.environ
+            "openai_api_key_env": "OPENAI_API_KEY" in os.environ,
+            "use_aws_secrets_manager": settings.USE_AWS_SECRETS_MANAGER,
+            "aws_region": settings.AWS_REGION if settings.USE_AWS_SECRETS_MANAGER else None,
+            "aws_secret_name": settings.AWS_SECRET_NAME if settings.USE_AWS_SECRETS_MANAGER else None
+        },
+        "authentication": {
+            "method": auth_status["method"],
+            "source": auth_status["source"],
+            "available": auth_status["available"],
+            "troubleshooting": get_auth_troubleshooting() if not auth_status["available"] else None
         }
     }
     
@@ -241,6 +253,30 @@ async def diagnostic():
         except Exception as e:
             diagnostic_info["vision_api"]["test_status"] = f"connection_failed: {str(e)}"
             diagnostic_info["vision_api"]["available"] = False
+    
+    # AWS Secrets Managerのテスト（有効な場合のみ）
+    if settings.USE_AWS_SECRETS_MANAGER:
+        try:
+            from app.services.auth.aws_secrets import test_aws_connection
+            aws_test_result = test_aws_connection()
+            diagnostic_info["aws_secrets_manager"] = {
+                "enabled": True,
+                "connection_test": "success" if aws_test_result else "failed",
+                "secret_name": settings.AWS_SECRET_NAME,
+                "region": settings.AWS_REGION
+            }
+        except Exception as e:
+            diagnostic_info["aws_secrets_manager"] = {
+                "enabled": True,
+                "connection_test": f"error: {str(e)}",
+                "secret_name": settings.AWS_SECRET_NAME,
+                "region": settings.AWS_REGION
+            }
+    else:
+        diagnostic_info["aws_secrets_manager"] = {
+            "enabled": False,
+            "message": "AWS Secrets Manager is disabled (USE_AWS_SECRETS_MANAGER=false)"
+        }
     
     return JSONResponse(content=diagnostic_info)
 

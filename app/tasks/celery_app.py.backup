@@ -12,7 +12,7 @@ def create_celery_app():
         "image_processor",
         broker=redis_url,
         backend=redis_url,
-        include=["app.tasks.image_tasks", "app.tasks.translation_tasks", "app.tasks.description_tasks", "app.tasks.ocr_tasks", "app.tasks.pipeline_tasks", "app.tasks.categorization_tasks", "app.tasks.item_level_tasks", "app.tasks.menu_item_parallel_tasks"]
+        include=["app.tasks.image_tasks", "app.tasks.translation_tasks", "app.tasks.description_tasks", "app.tasks.ocr_tasks", "app.tasks.pipeline_tasks", "app.tasks.categorization_tasks"]
     )
     
     # Celery最適化設定
@@ -68,15 +68,8 @@ def create_celery_app():
             'app.tasks.pipeline_tasks.category_stage45_pipeline': {'queue': 'pipeline_queue'},
             'app.tasks.pipeline_tasks.multiple_images_pipeline': {'queue': 'pipeline_queue'},
             # カテゴライズ並列化タスクルーティング
-            # アイテムレベル並列処理タスクルーティング（新機能）
-            'app.tasks.item_level_tasks.translate_single_item': {'queue': 'item_translation_queue'},
-            'app.tasks.item_level_tasks.process_items_batch': {'queue': 'item_batch_queue'},
             'app.tasks.categorization_tasks.categorize_text_chunk': {'queue': 'categorization_queue'},
             'app.tasks.categorization_tasks.categorize_menu_parallel': {'queue': 'categorization_queue'},
-            # SSE専用メニューアイテム並列処理タスクルーティング
-            'app.tasks.menu_item_parallel_tasks.sse_translate_menu_item': {'queue': 'sse_translate_queue'},
-            'app.tasks.menu_item_parallel_tasks.sse_generate_menu_description': {'queue': 'sse_description_queue'},
-            'app.tasks.menu_item_parallel_tasks.sse_generate_menu_image': {'queue': 'sse_image_queue'},
         },
         
         # キュー設定

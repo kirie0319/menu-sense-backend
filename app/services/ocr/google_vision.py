@@ -19,19 +19,15 @@ class GoogleVisionOCRService(BaseOCRService):
     def _initialize_client(self):
         """Google Vision APIクライアントを初期化"""
         try:
-            # Google Cloud認証情報の設定
-            if settings.GOOGLE_CREDENTIALS_JSON:
-                try:
-                    credentials_info = json.loads(settings.GOOGLE_CREDENTIALS_JSON)
-                    self.credentials = service_account.Credentials.from_service_account_info(credentials_info)
-                    self.client = vision.ImageAnnotatorClient(credentials=self.credentials)
-                    print("✅ Google Vision API client initialized with credentials")
-                except json.JSONDecodeError as e:
-                    print(f"⚠️ Failed to parse Google credentials JSON: {e}")
-                    self.client = None
-                except Exception as e:
-                    print(f"⚠️ Failed to load Google credentials: {e}")
-                    self.client = None
+            # 統一管理されたCredentialsManagerを使用
+            from app.services.auth.credentials import get_credentials_manager
+            
+            credentials_manager = get_credentials_manager()
+            self.credentials = credentials_manager.get_google_credentials()
+            
+            if self.credentials:
+                self.client = vision.ImageAnnotatorClient(credentials=self.credentials)
+                print("✅ Google Vision API client initialized with unified credentials")
             else:
                 # デフォルト認証を試行
                 try:
@@ -55,14 +51,11 @@ class GoogleVisionOCRService(BaseOCRService):
         
         # Vision API利用可能性チェック
         if not self.is_available():
+            from app.services.auth.unified_auth import get_auth_troubleshooting
             return self._create_error_result(
-                "Google Vision APIが利用できません。管理者に問い合わせてください。",
+                "Google Vision APIが利用できません。認証情報を確認してください。",
                 error_type="api_unavailable",
-                suggestions=[
-                    "GOOGLE_CREDENTIALS_JSON環境変数が設定されているか確認してください",
-                    "Google Cloud Vision APIが有効化されているか確認してください",
-                    "サービスアカウントキーが正しく設定されているか確認してください"
-                ]
+                suggestions=get_auth_troubleshooting()
             )
         
         try:

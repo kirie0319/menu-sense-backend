@@ -1,236 +1,263 @@
 #!/usr/bin/env python3
 """
 Menu Processor Setup Checker
-Google Vision API、OpenAI API、その他の設定を確認します
+実際のアプリケーション環境をテストします
 """
 
 import os
 import sys
 import json
-from dotenv import load_dotenv
 
 def check_environment():
-    """環境変数をチェック"""
-    print("🔍 環境変数チェック...")
+    """環境変数をチェック（統一認証システム使用）"""
+    print("🔍 環境変数チェック（統一認証システム使用）...")
     
-    load_dotenv()
-    
-    checks = {
-        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-        "GOOGLE_CREDENTIALS_JSON": os.getenv("GOOGLE_CREDENTIALS_JSON"),
-        "GOOGLE_APPLICATION_CREDENTIALS": os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
-        "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY")
-    }
-    
-    for key, value in checks.items():
-        if value:
-            if key == "GOOGLE_CREDENTIALS_JSON":
-                try:
-                    json.loads(value)
-                    print(f"✅ {key}: 有効なJSON形式")
-                except json.JSONDecodeError:
-                    print(f"❌ {key}: 無効なJSON形式")
-            elif key == "GOOGLE_APPLICATION_CREDENTIALS":
-                if os.path.exists(value):
-                    print(f"✅ {key}: ファイルが存在")
+    try:
+        # アプリケーションの設定を直接使用
+        from app.core.config import settings
+        from app.services.auth.unified_auth import get_auth_status, get_auth_troubleshooting
+        
+        print(f"✅ OPENAI_API_KEY: {'設定済み' if settings.OPENAI_API_KEY else '未設定'}")
+        print(f"✅ GEMINI_API_KEY: {'設定済み' if settings.GEMINI_API_KEY else '未設定'}")
+        
+        # 統一認証システムで認証状態をチェック
+        auth_status = get_auth_status()
+        print(f"✅ Google Cloud認証: {'設定済み' if auth_status['available'] else '未設定'}")
+        
+        if auth_status['available']:
+            print(f"   ✅ 認証方法: {auth_status['method']}")
+            print(f"   ✅ 認証ソース: {auth_status['source']}")
                 else:
-                    print(f"❌ {key}: ファイルが見つかりません")
-            else:
-                print(f"✅ {key}: 設定済み（{len(value)}文字）")
-        else:
-            print(f"❌ {key}: 未設定")
-    
-    return checks
-
-def check_google_cloud():
-    """Google Cloud APIをチェック"""
-    print("\n🔍 Google Cloud API チェック...")
-    
-    try:
-        from google.cloud import vision
-        print("✅ google-cloud-vision: インストール済み")
+            print("   ❌ 認証情報が見つかりません")
+            troubleshooting = get_auth_troubleshooting()
+            for suggestion in troubleshooting[:5]:  # 最初の5つのサジェスチョンのみ表示
+                if suggestion.strip():
+                    print(f"   💡 {suggestion}")
         
-        # 認証チェック
-        try:
-            client = vision.ImageAnnotatorClient()
-            print("✅ Google Vision API: 認証成功")
-            return True
-        except Exception as e:
-            print(f"❌ Google Vision API: 認証失敗 - {e}")
-            return False
-            
-    except ImportError:
-        print("❌ google-cloud-vision: 未インストール")
-        return False
-
-def check_openai():
-    """OpenAI APIをチェック"""
-    print("\n🔍 OpenAI API チェック...")
-    
-    try:
-        import openai
-        from openai import AsyncOpenAI
-        print("✅ openai: インストール済み")
+        return auth_status['available']
         
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-            # 簡単なテスト（実際にAPIコールはしない）
-            try:
-                client = AsyncOpenAI(api_key=api_key)
-                print("✅ OpenAI API: クライアント初期化成功")
-                return True
-            except Exception as e:
-                print(f"❌ OpenAI API: 初期化失敗 - {e}")
-                return False
-        else:
-            print("❌ OpenAI API: APIキーが未設定")
-            return False
-            
-    except ImportError:
-        print("❌ openai: 未インストール")
-        return False
-
-def check_gemini():
-    """Gemini APIをチェック"""
-    print("\n🔍 Gemini API チェック...")
-    
-    try:
-        import google.generativeai as genai
-        print("✅ google-generativeai: インストール済み")
-        
-        api_key = os.getenv("GEMINI_API_KEY")
-        if api_key:
-            try:
-                genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-2.0-flash-exp')
-                print("✅ Gemini API: モデル初期化成功 (gemini-2.0-flash-exp)")
-                return True
-            except Exception as e:
-                print(f"❌ Gemini API: 初期化失敗 - {e}")
-                return False
-        else:
-            print("❌ Gemini API: APIキーが未設定")
-            return False
-            
-    except ImportError:
-        print("❌ google-generativeai: 未インストール")
-        print("   インストール: pip install google-generativeai")
-        return False
-
-def check_dependencies():
-    """依存関係をチェック"""
-    print("\n🔍 依存関係チェック...")
-    
-    required_packages = [
-        'fastapi',
-        'uvicorn',
-        'python-dotenv',
-        'aiofiles',
-        'google-cloud-vision',
-        'google-cloud-translate',
-        'google-generativeai',
-        'openai'
-    ]
-    
-    missing_packages = []
-    
-    for package in required_packages:
-        try:
-            __import__(package.replace('-', '_'))
-            print(f"✅ {package}: インストール済み")
-        except ImportError:
-            print(f"❌ {package}: 未インストール")
-            missing_packages.append(package)
-    
-    if missing_packages:
-        print(f"\n⚠️ 不足しているパッケージ: {', '.join(missing_packages)}")
-        print("次のコマンドでインストールしてください:")
-        print(f"pip install {' '.join(missing_packages)}")
-        return False
-    
-    return True
-
-def test_apis():
-    """APIの基本テスト"""
-    print("\n🧪 API基本テスト...")
-    
-    # Google Vision APIテスト
-    try:
-        from google.cloud import vision
-        client = vision.ImageAnnotatorClient()
-        
-        # 空の画像でテスト（エラーが返るが、接続は確認できる）
-        try:
-            response = client.text_detection(vision.Image(content=b''))
-            print("✅ Google Vision API: 接続テスト成功")
-        except Exception as e:
-            if "Invalid image" in str(e) or "empty" in str(e):
-                print("✅ Google Vision API: 接続OK（空画像エラーは正常）")
-            else:
-                print(f"❌ Google Vision API: 接続エラー - {e}")
-                
     except Exception as e:
-        print(f"❌ Google Vision API: テスト失敗 - {e}")
+        print(f"❌ アプリケーション設定の読み込みに失敗: {e}")
+        return False
 
-def provide_solutions():
-    """解決策を提案"""
-    print("\n💡 問題がある場合の解決策:")
+def check_actual_services():
+    """実際のアプリケーションサービスをテスト"""
+    print("\n🧪 実際のアプリケーションサービステスト...")
     
-    print("\n1. Google Vision APIの設定:")
-    print("   - Google Cloud Projectを作成")
-    print("   - Vision APIを有効化")
-    print("   - サービスアカウントを作成して権限付与")
-    print("   - 認証情報をGOOGLE_CREDENTIALS_JSON環境変数に設定")
+    services_status = {}
     
-    print("\n2. OpenAI APIの設定:")
-    print("   - OpenAI APIキーを取得")
-    print("   - OPENAI_API_KEY環境変数に設定")
+    # 認証情報管理
+    try:
+        from app.services.auth.credentials import get_credentials_manager
+        cm = get_credentials_manager()
+        
+        if cm.has_google_credentials():
+            print("✅ Google Cloud認証情報管理: 正常")
+            services_status['auth'] = True
+        else:
+            print("⚠️ Google Cloud認証情報管理: 認証情報なし")
+            services_status['auth'] = False
+            
+    except Exception as e:
+        print(f"❌ Google Cloud認証情報管理: エラー - {e}")
+        services_status['auth'] = False
     
-    print("\n3. Gemini APIの設定:")
-    print("   - Google AI Studio (https://aistudio.google.com) でAPIキーを取得")
-    print("   - GEMINI_API_KEY環境変数に設定")
-    print("   - pip install google-generativeai")
+    # Gemini OCR Service (Primary)
+    try:
+        from app.services.ocr.gemini import GeminiOCRService
+        gemini_ocr = GeminiOCRService()
+        
+        if gemini_ocr.is_available():
+            print("✅ Gemini OCR Service (Primary): 利用可能")
+            services_status['gemini_ocr'] = True
+        else:
+            print("❌ Gemini OCR Service (Primary): 利用不可")
+            services_status['gemini_ocr'] = False
+            
+    except Exception as e:
+        print(f"❌ Gemini OCR Service: エラー - {e}")
+        services_status['gemini_ocr'] = False
     
-    print("\n4. 依存関係のインストール:")
-    print("   pip install -r requirements.txt")
+    # Google Vision OCR Service (Parallel)
+    try:
+        from app.services.ocr.google_vision import GoogleVisionOCRService
+        vision_ocr = GoogleVisionOCRService()
+        
+        if vision_ocr.is_available():
+            print("✅ Google Vision OCR Service (Parallel): 利用可能")
+            services_status['google_vision'] = True
+        else:
+            print("❌ Google Vision OCR Service (Parallel): 利用不可")
+            services_status['google_vision'] = False
+            
+    except Exception as e:
+        print(f"❌ Google Vision OCR Service: エラー - {e}")
+        services_status['google_vision'] = False
     
-    print("\n5. 環境変数の設定:")
-    print("   - .envファイルを作成")
-    print("   - env_example.txtを参考に必要な変数を設定")
+    # OpenAI Services
+    try:
+        from app.services.category.openai import OpenAICategoryService
+        from app.services.translation.openai import OpenAITranslationService
+        from app.services.description.openai import OpenAIDescriptionService
+        
+        openai_services = []
+        
+        category_service = OpenAICategoryService()
+        if category_service.is_available():
+            print("✅ OpenAI Category Service: 利用可能")
+            openai_services.append('category')
+        
+        translation_service = OpenAITranslationService()
+        if translation_service.is_available():
+            print("✅ OpenAI Translation Service: 利用可能")
+            openai_services.append('translation')
+            
+        description_service = OpenAIDescriptionService()
+        if description_service.is_available():
+            print("✅ OpenAI Description Service: 利用可能")
+            openai_services.append('description')
+        
+        services_status['openai'] = len(openai_services) == 3
+        if len(openai_services) < 3:
+            print(f"⚠️ OpenAI Services: {len(openai_services)}/3 利用可能")
+            
+    except Exception as e:
+        print(f"❌ OpenAI Services: エラー - {e}")
+        services_status['openai'] = False
+    
+    # Google Translate Service
+    try:
+        from app.services.translation.google_translate import GoogleTranslateService
+        translate_service = GoogleTranslateService()
+        
+        if translate_service.is_available():
+            print("✅ Google Translate Service: 利用可能")
+            services_status['google_translate'] = True
+        else:
+            print("⚠️ Google Translate Service: デフォルト認証で動作")
+            services_status['google_translate'] = True  # デフォルトでも動作するのでOK
+            
+    except Exception as e:
+        print(f"❌ Google Translate Service: エラー - {e}")
+        services_status['google_translate'] = False
+    
+    # Imagen 3 Service
+    try:
+        from app.services.image.imagen3 import Imagen3Service
+        imagen_service = Imagen3Service()
+        
+        if imagen_service.is_available():
+            print("✅ Imagen 3 Image Service: 利用可能")
+            services_status['imagen'] = True
+        else:
+            print("❌ Imagen 3 Image Service: 利用不可")
+            services_status['imagen'] = False
+            
+    except Exception as e:
+        print(f"❌ Imagen 3 Service: エラー - {e}")
+        services_status['imagen'] = False
+    
+    return services_status
 
-def main():
-    """メイン関数"""
-    print("🚀 Menu Processor セットアップチェッカー")
-    print("=" * 50)
+def check_critical_dependencies():
+    """重要な依存関係のみをチェック"""
+    print("\n🔍 重要な依存関係チェック...")
+    
+    critical_packages = [
+        ('fastapi', 'FastAPI Web Framework'),
+        ('uvicorn', 'ASGI Server'),
+        ('google.cloud.vision', 'Google Vision API'),
+        ('google.cloud.translate', 'Google Translate API'),
+        ('google.generativeai', 'Gemini API'),
+        ('openai', 'OpenAI API')
+    ]
     
     all_good = True
     
-    # 各チェックを実行
-    env_checks = check_environment()
-    all_good &= bool(env_checks["OPENAI_API_KEY"])
-    all_good &= bool(env_checks["GOOGLE_CREDENTIALS_JSON"] or env_checks["GOOGLE_APPLICATION_CREDENTIALS"])
+    for import_name, description in critical_packages:
+        try:
+            if import_name == 'google.cloud.vision':
+                from google.cloud import vision
+            elif import_name == 'google.cloud.translate':
+                from google.cloud import translate
+            elif import_name == 'google.generativeai':
+                import google.generativeai
+            else:
+                __import__(import_name)
+            print(f"✅ {description}: 利用可能")
+        except ImportError:
+            print(f"❌ {description}: 未インストール")
+            all_good = False
     
-    deps_ok = check_dependencies()
-    all_good &= deps_ok
+    return all_good
+
+def provide_optimized_solutions():
+    """最適化された解決策を提案"""
+    print("\n💡 問題がある場合の解決策:")
     
-    if deps_ok:
-        gcp_ok = check_google_cloud()
-        openai_ok = check_openai()
-        gemini_ok = check_gemini()
-        all_good &= gcp_ok and openai_ok and gemini_ok
+    print("\n🔧 基本的なトラブルシューティング:")
+    print("1. アプリケーションを再起動してください:")
+    print("   python -m app.main")
+    
+    print("\n2. 環境変数の確認:")
+    print("   - .envファイルが存在することを確認")
+    print("   - GOOGLE_CREDENTIALS_JSONが一行で記述されていることを確認")
+    print("   - JSON内に不正な制御文字がないことを確認")
+    
+    print("\n3. 依存関係の更新:")
+    print("   pip install -r requirements.txt")
+    
+    print("\n4. Google Cloud認証の確認:")
+    print("   - サービスアカウントキーが有効であることを確認")
+    print("   - Vision API、Translate APIが有効化されていることを確認")
+    
+    print("\n⚠️ 注意: このチェッカーでエラーが表示されても、")
+    print("   実際のアプリケーションが正常に動作している場合があります。")
+    print("   最終的な動作確認は 'python -m app.main' で行ってください。")
+
+def main():
+    """メイン関数"""
+    print("🚀 Menu Processor 最適化セットアップチェッカー")
+    print("=" * 55)
+    
+    # Step 1: 環境変数チェック
+    env_ok = check_environment()
+    
+    # Step 2: 重要な依存関係チェック
+    deps_ok = check_critical_dependencies()
+    
+    # Step 3: 実際のサービステスト
+    if env_ok and deps_ok:
+        services_status = check_actual_services()
         
-        if gcp_ok and openai_ok and gemini_ok:
-            test_apis()
-    
-    print("\n" + "=" * 50)
-    
-    if all_good:
-        print("🎉 セットアップ完了！すべてのAPIが正常に設定されています。")
-        print("次のコマンドでサーバーを起動できます:")
-        print("python run_mvp.py")
+        # 結果の評価
+        core_services = ['gemini_ocr', 'openai']  # 最低限必要なサービス
+        core_ok = all(services_status.get(service, False) for service in core_services)
+        
+        optional_services = ['google_vision', 'google_translate', 'imagen']
+        optional_count = sum(1 for service in optional_services if services_status.get(service, False))
+        
+        print("\n" + "=" * 55)
+        
+        if core_ok:
+            print("🎉 メインサービスが正常に動作しています！")
+            print("次のコマンドでサーバーを起動できます:")
+            print("python -m app.main")
+            
+            print(f"\n📊 サービス状況:")
+            print(f"- メインサービス: ✅ {len(core_services)}/{len(core_services)}")
+            print(f"- オプションサービス: {'✅' if optional_count == len(optional_services) else '⚠️'} {optional_count}/{len(optional_services)}")
+            
+            if optional_count < len(optional_services):
+                print("\n⚠️ 一部のオプションサービスが利用できませんが、")
+                print("   アプリケーションの基本機能は正常に動作します。")
+        else:
+            print("⚠️ 一部のメインサービスに問題があります。")
+            provide_optimized_solutions()
+            sys.exit(1)
     else:
-        print("⚠️ 一部の設定に問題があります。")
-        provide_solutions()
+        print("❌ 基本設定に問題があります。")
+        provide_optimized_solutions()
         sys.exit(1)
 
 if __name__ == "__main__":

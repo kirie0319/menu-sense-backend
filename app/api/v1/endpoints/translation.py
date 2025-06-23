@@ -132,8 +132,10 @@ async def get_translation_status():
         
         # 推奨事項を追加
         if not google_status["available"] and not openai_status["available"]:
-            response["recommendations"] = [
-                "Set GOOGLE_CREDENTIALS_JSON environment variable",
+            from app.services.auth.unified_auth import get_auth_troubleshooting
+            response["recommendations"] = get_auth_troubleshooting() + [
+                "",
+                "Additional steps:",
                 "Set OPENAI_API_KEY environment variable",
                 "Install required packages: google-cloud-translate, openai",
                 "Check API access permissions and quotas"

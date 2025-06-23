@@ -9,6 +9,7 @@ API認証・クライアント管理サービス
 """
 
 # 主要クラス
+from .unified_auth import UnifiedAuthManager, get_unified_auth_manager
 from .credentials import CredentialsManager, get_credentials_manager
 from .clients import APIClientsManager, get_api_clients_manager
 from .openai_retry import OpenAIRetryService, get_openai_retry_service, call_openai_with_retry
@@ -16,7 +17,7 @@ from .openai_retry import OpenAIRetryService, get_openai_retry_service, call_ope
 # 便利な関数をエクスポート（後方互換性のため）
 def get_google_credentials():
     """Google Cloud認証情報を取得（後方互換性）"""
-    return get_credentials_manager().get_google_credentials()
+    return get_unified_auth_manager().get_credentials()
 
 def get_vision_client():
     """Google Vision APIクライアントを取得（後方互換性）"""
@@ -62,6 +63,14 @@ def is_gemini_available():
 def is_imagen_available():
     """Imagen 3 APIが利用可能かチェック"""
     return get_api_clients_manager().is_imagen_available()
+
+# 統一認証システムの直接インターフェース
+from .unified_auth import (
+    get_google_credentials as get_unified_google_credentials,
+    is_google_auth_available,
+    get_auth_status,
+    get_auth_troubleshooting
+)
 
 # 後方互換性のための変数エクスポート
 def get_compatibility_variables():
@@ -109,10 +118,13 @@ def get_auth_stats():
 
 __all__ = [
     # クラス
-    'CredentialsManager', 'APIClientsManager', 'OpenAIRetryService',
+    'UnifiedAuthManager', 'CredentialsManager', 'APIClientsManager', 'OpenAIRetryService',
     
     # インスタンス取得関数
-    'get_credentials_manager', 'get_api_clients_manager', 'get_openai_retry_service',
+    'get_unified_auth_manager', 'get_credentials_manager', 'get_api_clients_manager', 'get_openai_retry_service',
+    
+    # 統一認証システム関数
+    'get_unified_google_credentials', 'is_google_auth_available', 'get_auth_status', 'get_auth_troubleshooting',
     
     # 後方互換性関数
     'get_google_credentials', 'get_vision_client', 'get_translate_client',

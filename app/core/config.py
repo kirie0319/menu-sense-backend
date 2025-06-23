@@ -37,6 +37,16 @@ class Settings(BaseModel):
     # Google Cloud認証情報
     GOOGLE_CREDENTIALS_JSON: Optional[str] = os.getenv("GOOGLE_CREDENTIALS_JSON")
     
+    # AWS Secrets Manager設定
+    AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
+    AWS_SECRET_NAME: str = os.getenv("AWS_SECRET_NAME", "prod/menu-sense/google-credentials")
+    USE_AWS_SECRETS_MANAGER: bool = os.getenv("USE_AWS_SECRETS_MANAGER", "false").lower() == "true"
+    
+    # AWS認証情報（プロダクション環境用）
+    AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
+    AWS_SESSION_TOKEN: Optional[str] = os.getenv("AWS_SESSION_TOKEN")  # IAM Role使用時に必要
+    
     # API設定
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
@@ -61,11 +71,11 @@ class Settings(BaseModel):
     
     # 並列処理設定（詳細説明生成用）
     CONCURRENT_CHUNK_LIMIT: int = int(os.getenv("CONCURRENT_CHUNK_LIMIT", 10))  # 同時実行チャンク数
-    ENABLE_CATEGORY_PARALLEL: bool = os.getenv("ENABLE_CATEGORY_PARALLEL", "false").lower() == "true"  # カテゴリレベル並列処理
+    ENABLE_CATEGORY_PARALLEL: bool = os.getenv("ENABLE_CATEGORY_PARALLEL", "true").lower() == "true"  # カテゴリレベル並列処理
     
     # 画像生成並列処理設定
     IMAGE_CONCURRENT_CHUNK_LIMIT: int = int(os.getenv("IMAGE_CONCURRENT_CHUNK_LIMIT", 3))  # 画像生成同時実行チャンク数
-    ENABLE_IMAGE_CATEGORY_PARALLEL: bool = os.getenv("ENABLE_IMAGE_CATEGORY_PARALLEL", "false").lower() == "true"  # 画像生成カテゴリレベル並列処理
+    ENABLE_IMAGE_CATEGORY_PARALLEL: bool = os.getenv("ENABLE_IMAGE_CATEGORY_PARALLEL", "true").lower() == "true"  # 画像生成カテゴリレベル並列処理
     IMAGE_PROCESSING_CHUNK_SIZE: int = int(os.getenv("IMAGE_PROCESSING_CHUNK_SIZE", 3))  # 画像生成チャンクサイズ
     
     # SSE設定（リアルタイム進行状況）
@@ -204,7 +214,8 @@ def check_api_availability():
     availability = {
         "openai": bool(settings.OPENAI_API_KEY),
         "gemini": bool(settings.GEMINI_API_KEY),
-        "google_credentials": bool(settings.GOOGLE_CREDENTIALS_JSON)
+        "google_credentials": bool(settings.GOOGLE_CREDENTIALS_JSON) if not settings.USE_AWS_SECRETS_MANAGER else True,
+        "aws_secrets_manager": settings.USE_AWS_SECRETS_MANAGER
     }
     return availability
 
@@ -219,7 +230,14 @@ def validate_settings():
     if not settings.GEMINI_API_KEY:
         issues.append("GEMINI_API_KEY not set")
         
-    if not settings.GOOGLE_CREDENTIALS_JSON:
-        issues.append("GOOGLE_CREDENTIALS_JSON not set")
+    # Google認証情報の検証
+    if settings.USE_AWS_SECRETS_MANAGER:
+        if not settings.AWS_SECRET_NAME:
+            issues.append("AWS_SECRET_NAME not set (required when USE_AWS_SECRETS_MANAGER=true)")
+        if not settings.AWS_REGION:
+            issues.append("AWS_REGION not set (required when USE_AWS_SECRETS_MANAGER=true)")
+    else:
+        if not settings.GOOGLE_CREDENTIALS_JSON:
+            issues.append("GOOGLE_CREDENTIALS_JSON not set (required when USE_AWS_SECRETS_MANAGER=false)")
     
     return issues

@@ -11,7 +11,11 @@ router = APIRouter()
 
 @router.post("/process")
 async def process_menu_start(file: UploadFile = File(...)):
-    """メニュー処理を開始してセッションIDを返す"""
+    """
+    メニュー処理を開始してセッションIDを返す（Phase 2統合処理使用）
+    
+    OCR → カテゴライズ → Phase 2統合処理（翻訳→詳細説明→画像生成）
+    """
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="File must be an image")
     
@@ -32,10 +36,18 @@ async def process_menu_start(file: UploadFile = File(...)):
         content = await file.read()
         await f.write(content)
     
-    # バックグラウンドでメニュー処理を開始
-    asyncio.create_task(process_menu_background(session_id, file_path))
+    # バックグラウンドでメニュー処理を開始（Phase 2統合処理有効）
+    asyncio.create_task(process_menu_background(
+        session_id=session_id, 
+        file_path=file_path,
+        use_phase2_integration=True  # Phase 2統合処理を有効化
+    ))
     
-    return JSONResponse(content={"session_id": session_id})
+    return JSONResponse(content={
+        "session_id": session_id,
+        "processing_mode": "phase2_integration",
+        "description": "3つずつ統合処理（翻訳→詳細説明→画像生成）でリアルタイム配信"
+    })
 
 @router.post("/translate")
 async def translate_menu(file: UploadFile = File(...)):

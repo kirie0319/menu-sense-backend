@@ -25,12 +25,15 @@ class GoogleTranslateService(BaseTranslationService):
                 print("❌ google-cloud-translate package not installed. Install with: pip install google-cloud-translate")
                 return
             
-            # Google Cloud認証情報を取得
-            google_credentials = self._get_google_credentials()
+            # 統一管理されたCredentialsManagerを使用
+            from app.services.auth.credentials import get_credentials_manager
+            
+            credentials_manager = get_credentials_manager()
+            google_credentials = credentials_manager.get_google_credentials()
             
             if google_credentials:
                 self.client = translate.Client(credentials=google_credentials)
-                print("🔧 Google Translate Service initialized with credentials")
+                print("🔧 Google Translate Service initialized with unified credentials")
             else:
                 # デフォルト認証を試行
                 try:
@@ -43,20 +46,6 @@ class GoogleTranslateService(BaseTranslationService):
         except Exception as e:
             print(f"❌ Failed to initialize Google Translate Service: {e}")
             self.client = None
-    
-    def _get_google_credentials(self):
-        """Google Cloud認証情報を取得"""
-        try:
-            if settings.GOOGLE_CREDENTIALS_JSON:
-                import json
-                from google.oauth2 import service_account
-                
-                credentials_info = json.loads(settings.GOOGLE_CREDENTIALS_JSON)
-                return service_account.Credentials.from_service_account_info(credentials_info)
-            return None
-        except Exception as e:
-            print(f"⚠️ Failed to load Google credentials: {e}")
-            return None
     
     def is_available(self) -> bool:
         """サービスが利用可能かチェック"""
@@ -119,17 +108,19 @@ class GoogleTranslateService(BaseTranslationService):
         
         # サービス利用可能性チェック
         if not self.is_available():
+            from app.services.auth.unified_auth import get_auth_troubleshooting
             return TranslationResult(
                 success=False,
                 translation_method="google_translate",
-                error="Google Translate API is not available",
+                error="Google Translate API is not available. Check authentication setup.",
                 metadata={
                     "error_type": "service_unavailable",
-                    "suggestions": [
-                        "Set GOOGLE_CREDENTIALS_JSON environment variable",
-                        "Install google-cloud-translate package: pip install google-cloud-translate",
-                        "Check Google Cloud API permissions",
-                        "Verify internet connectivity"
+                    "suggestions": get_auth_troubleshooting() + [
+                        "",
+                        "Additional checks:",
+                        "- Install google-cloud-translate package: pip install google-cloud-translate",
+                        "- Check Google Cloud Translate API is enabled",
+                        "- Verify internet connectivity"
                     ]
                 }
             )
@@ -291,11 +282,12 @@ class GoogleTranslateService(BaseTranslationService):
                     "Consider upgrading your Google Cloud plan"
                 ]
             elif "credentials" in str(e).lower() or "auth" in str(e).lower():
+                from app.services.auth.unified_auth import get_auth_troubleshooting
                 error_type = "authentication_error"
-                suggestions = [
-                    "Check GOOGLE_CREDENTIALS_JSON environment variable",
-                    "Verify Google Cloud credentials are valid",
-                    "Ensure Translate API is enabled in Google Cloud Console"
+                suggestions = get_auth_troubleshooting() + [
+                    "",
+                    "Additional checks:",
+                    "- Ensure Translate API is enabled in Google Cloud Console"
                 ]
             elif "network" in str(e).lower() or "connection" in str(e).lower():
                 error_type = "network_error"
