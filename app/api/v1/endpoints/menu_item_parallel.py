@@ -12,16 +12,22 @@ import uuid
 import json
 import asyncio
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, File, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import aiofiles
+import os
 
 from app.tasks.menu_item_parallel_tasks import (
-    sse_translate_menu_item,
-    sse_generate_menu_description,
-    get_sse_status,
-    sse_redis_connection
+    test_translate_menu_item,
+    test_generate_menu_description,
+    get_test_status,
+    test_redis_connection,
+    real_translate_menu_item,
+    real_generate_menu_description,
+    get_real_status
 )
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -57,6 +63,20 @@ class SessionStatusResponse(BaseModel):
     progress_percentage: float
     items_status: List[Dict[str, Any]]
     api_integration: str
+
+class OCRToParallelRequest(BaseModel):
+    """OCR → カテゴリ分類 → 並列処理統合リクエスト"""
+    use_real_apis: Optional[bool] = True  # 実際のAPI統合を使用
+
+class OCRToParallelResponse(BaseModel):
+    """OCR → カテゴリ分類 → 並列処理統合レスポンス"""
+    success: bool
+    session_id: str
+    ocr_result: Dict[str, Any]
+    categorization_result: Dict[str, Any] 
+    parallel_processing: Dict[str, Any]
+    streaming_url: str
+    message: str
 
 # ===============================================
 # 🔄 SSEリアルタイムストリーミング機能
@@ -143,7 +163,7 @@ async def stream_real_time_progress(session_id: str, request: Request):
                     items_status = []
                     
                     for item_id in range(total_items):
-                        status = get_sse_status(session_id, item_id)
+                        status = get_real_status(session_id, item_id)
                         
                         if "error" not in status:
                             t_complete = status.get("translation", {}).get("completed", False)
@@ -357,7 +377,7 @@ async def process_menu_items(request: MenuItemsRequest):
             raise HTTPException(status_code=400, detail="Too many menu items (max: 100)")
         
         # Redis接続確認
-        redis_status = sse_redis_connection()
+        redis_status = test_redis_connection()
         if not redis_status["success"]:
             raise HTTPException(status_code=500, detail=f"Redis connection failed: {redis_status['message']}")
         
@@ -382,19 +402,28 @@ async def process_menu_items(request: MenuItemsRequest):
         }
         send_sse_event(session_id, start_event)
         
-        # 各メニューアイテムに対してSSE専用タスクを並列投入
+        # 各メニューアイテムに対して実API統合タスクを並列投入
         for item_id, item_text in enumerate(request.menu_items):
-            # Google Translate翻訳タスク投入（SSE専用キュー）
-            sse_translate_menu_item.apply_async(
-                args=[session_id, item_id, item_text],
-                queue='sse_translate_queue'
-            )
-            
-            # OpenAI説明生成タスク投入（SSE専用キュー）
-            sse_generate_menu_description.apply_async(
-                args=[session_id, item_id, item_text],
-                queue='sse_description_queue'
-            )
+            if request.test_mode:
+                # テストモード（後方互換性）
+                test_translate_menu_item.apply_async(
+                    args=[session_id, item_id, item_text],
+                    queue='translate_queue'
+                )
+                test_generate_menu_description.apply_async(
+                    args=[session_id, item_id, item_text],
+                    queue='description_queue'
+                )
+            else:
+                # 実API統合モード（デフォルト）
+                real_translate_menu_item.apply_async(
+                    args=[session_id, item_id, item_text, "Other"],
+                    queue='real_translate_queue'
+                )
+                real_generate_menu_description.apply_async(
+                    args=[session_id, item_id, item_text, "", "Other"],
+                    queue='real_description_queue'
+                )
             
             # タスク投入SSEイベント
             task_event = {
@@ -435,7 +464,7 @@ async def get_item_status(session_id: str, item_id: int):
     """
     
     try:
-        status = get_sse_status(session_id, item_id)
+        status = get_real_status(session_id, item_id)
         
         if "error" in status:
             raise HTTPException(status_code=500, detail=status["error"])
@@ -478,7 +507,7 @@ async def get_session_status(session_id: str, total_items: int):
         
         # 各アイテムの状況を取得
         for item_id in range(total_items):
-            status = get_sse_status(session_id, item_id)
+            status = get_real_status(session_id, item_id)
             
             if "error" in status:
                 # エラーがあっても継続
@@ -549,7 +578,7 @@ async def get_session_status(session_id: str, total_items: int):
 async def test_redis():
     """Redis接続テスト用エンドポイント（実際のAPI統合版）"""
     try:
-        result = sse_redis_connection()
+        result = test_redis_connection()
         return {
             "success": result["success"],
             "message": result["message"],
@@ -575,12 +604,20 @@ async def test_single_item_processing(
         tasks = []
         
         if test_translation:
-            translation_task = sse_translate_menu_item.delay(session_id, item_id, item_text)
-            tasks.append(("sse_translation", translation_task.id))
+            if use_real_apis:
+                translation_task = real_translate_menu_item.delay(session_id, item_id, item_text, "Other")
+                tasks.append(("real_translation", translation_task.id))
+            else:
+                translation_task = test_translate_menu_item.delay(session_id, item_id, item_text)
+                tasks.append(("test_translation", translation_task.id))
         
         if test_description:
-            description_task = sse_generate_menu_description.delay(session_id, item_id, item_text)
-            tasks.append(("sse_description", description_task.id))
+            if use_real_apis:
+                description_task = real_generate_menu_description.delay(session_id, item_id, item_text, "", "Other")
+                tasks.append(("real_description", description_task.id))
+            else:
+                description_task = test_generate_menu_description.delay(session_id, item_id, item_text)
+                tasks.append(("test_description", description_task.id))
         
         return {
             "success": True,
@@ -636,7 +673,7 @@ async def get_system_stats():
     """システム統計情報を取得（実際のAPI統合版）"""
     try:
         # Redis統計
-        redis_status = sse_redis_connection()
+        redis_status = test_redis_connection()
         
         # API利用可能性チェック
         from app.services.translation.google_translate import GoogleTranslateService
@@ -650,8 +687,8 @@ async def get_system_stats():
         # Celery統計（基本情報のみ）
         celery_status = {
             "available": True,  # 後で celery inspect を追加
-            "queues": ["sse_translate_queue", "sse_description_queue", "sse_image_queue", "default"],
-            "sse_api_integration": True
+            "queues": ["real_translate_queue", "real_description_queue", "real_image_queue", "default"],
+            "real_api_integration": True
         }
         
         # SSE統計
@@ -670,17 +707,17 @@ async def get_system_stats():
                 "google_translate": {
                     "available": google_translate.is_available(),
                     "service": "Google Translate API",
-                    "queue": "sse_translate_queue"
+                    "queue": "real_translate_queue"
                 },
                 "openai_description": {
                     "available": openai_description.is_available(),
                     "service": "OpenAI GPT-4.1-mini",
-                    "queue": "sse_description_queue"
+                    "queue": "real_description_queue"
                 },
                 "imagen3_image": {
                     "available": imagen3_service.is_available(),
                     "service": "Google Imagen 3",
-                    "queue": "sse_image_queue"
+                    "queue": "real_image_queue"
                 }
             },
             "system": {
@@ -835,4 +872,189 @@ async def get_sse_stats():
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get SSE stats: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Failed to get SSE stats: {str(e)}")
+
+@router.post("/ocr-to-parallel")
+async def ocr_categorize_and_parallel_process(
+    file: UploadFile = File(...),
+    use_real_apis: bool = True
+):
+    """
+    🚀 OCR → カテゴリ分類 → 並列処理の完全統合フロー
+    
+    処理の流れ:
+    1. 画像からOCRでテキスト抽出（Gemini 2.0 Flash）
+    2. 抽出されたテキストをカテゴリ分類（OpenAI Function Calling）
+    3. カテゴリ分類されたメニューアイテムを並列タスクに投入
+    4. リアルタイムSSEストリーミングで進行状況監視
+    
+    Args:
+        file: アップロードされた画像ファイル
+        use_real_apis: 実際のAPI統合を使用するかどうか
+        
+    Returns:
+        統合処理結果とSSEストリーミングURL
+    """
+    
+    try:
+        # セッションID生成
+        session_id = f"ocr_parallel_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        
+        # ファイル形式チェック
+        if not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Only image files are allowed")
+        
+        # Redis接続確認
+        redis_status = test_redis_connection()
+        if not redis_status["success"]:
+            raise HTTPException(status_code=500, detail=f"Redis connection failed: {redis_status['message']}")
+        
+        # 一時ファイル保存
+        file_path = f"{settings.UPLOAD_DIR}/temp_ocr_parallel_{session_id}_{file.filename}"
+        
+        try:
+            async with aiofiles.open(file_path, 'wb') as f:
+                content = await file.read()
+                await f.write(content)
+            
+            # Step 1: OCR処理（Gemini 2.0 Flash）
+            print(f"🔍 [OCR] Starting OCR with Gemini 2.0 Flash: {file.filename}")
+            
+            from app.services.ocr import extract_text
+            ocr_result = await extract_text(image_path=file_path, session_id=session_id)
+            
+            if not ocr_result.success:
+                raise HTTPException(status_code=500, detail=f"OCR failed: {ocr_result.error}")
+            
+            extracted_text = ocr_result.extracted_text
+            print(f"✅ [OCR] Extracted {len(extracted_text)} characters")
+            
+            # Step 2: カテゴリ分類（OpenAI Function Calling）
+            print(f"🏷️ [CATEGORY] Starting categorization with OpenAI Function Calling")
+            
+            from app.services.category import categorize_menu
+            category_result = await categorize_menu(extracted_text=extracted_text, session_id=session_id)
+            
+            if not category_result.success:
+                raise HTTPException(status_code=500, detail=f"Categorization failed: {category_result.error}")
+            
+            categorized_data = category_result.categories
+            print(f"✅ [CATEGORY] Categorized into {len(categorized_data)} categories")
+            
+            # Step 3: カテゴリ分類されたメニューアイテムを並列タスクに投入
+            print(f"🚀 [PARALLEL] Starting parallel task processing")
+            
+            # SSE用セッション初期化
+            _active_sessions[session_id] = {
+                "start_time": time.time(),
+                "total_items": sum(len(items) for items in categorized_data.values()),
+                "connection_active": False
+            }
+            
+            # 処理開始SSEイベント
+            start_event = {
+                "type": "parallel_processing_started",
+                "session_id": session_id,
+                "ocr_result": {
+                    "extracted_text_length": len(extracted_text),
+                    "provider": "Gemini 2.0 Flash"
+                },
+                "categorization_result": {
+                    "categories": list(categorized_data.keys()),
+                    "total_items": sum(len(items) for items in categorized_data.values()),
+                    "provider": "OpenAI Function Calling"
+                },
+                "message": f"🚀 OCR → Categorization complete. Starting parallel processing for {sum(len(items) for items in categorized_data.values())} menu items"
+            }
+            send_sse_event(session_id, start_event)
+            
+            # 各カテゴリのメニューアイテムに対して並列タスク投入
+            item_id = 0
+            for category, items in categorized_data.items():
+                for item in items:
+                    # アイテム名を抽出
+                    item_text = item if isinstance(item, str) else item.get('name', str(item))
+                    
+                    if use_real_apis:
+                        # 実際のAPI統合タスクを投入
+                        real_translate_menu_item.apply_async(
+                            args=[session_id, item_id, item_text, category],
+                            queue='real_translate_queue'
+                        )
+                        
+                        real_generate_menu_description.apply_async(
+                            args=[session_id, item_id, item_text, "", category],
+                            queue='real_description_queue'
+                        )
+                        
+                        api_mode = "real_api_integration"
+                        task_queues = ["real_translate_queue", "real_description_queue"]
+                    else:
+                        # テストタスクを投入
+                        test_translate_menu_item.apply_async(
+                            args=[session_id, item_id, item_text],
+                            queue='translate_queue'
+                        )
+                        
+                        test_generate_menu_description.apply_async(
+                            args=[session_id, item_id, item_text],
+                            queue='description_queue'
+                        )
+                        
+                        api_mode = "test_mode"
+                        task_queues = ["translate_queue", "description_queue"]
+                    
+                    # タスク投入SSEイベント
+                    task_event = {
+                        "type": "item_task_queued",
+                        "session_id": session_id,
+                        "item_id": item_id,
+                        "item_text": item_text,
+                        "category": category,
+                        "queued_tasks": ["translation", "description"],
+                        "message": f"📤 [{category}] Queued processing for: {item_text}"
+                    }
+                    send_sse_event(session_id, task_event)
+                    
+                    item_id += 1
+            
+            print(f"✅ [PARALLEL] Queued {item_id} items for parallel processing")
+            
+            return {
+                "success": True,
+                "session_id": session_id,
+                "processing_summary": {
+                    "ocr": {
+                        "success": True,
+                        "extracted_text_length": len(extracted_text),
+                        "provider": "Gemini 2.0 Flash"
+                    },
+                    "categorization": {
+                        "success": True,
+                        "categories": list(categorized_data.keys()),
+                        "total_items": sum(len(items) for items in categorized_data.values()),
+                        "provider": "OpenAI Function Calling"
+                    },
+                    "parallel_processing": {
+                        "success": True,
+                        "total_tasks_queued": item_id * 2,  # 翻訳 + 説明
+                        "api_mode": api_mode,
+                        "task_queues": task_queues
+                    }
+                },
+                "streaming_url": f"/api/v1/menu-parallel/stream/{session_id}",
+                "status_url": f"/api/v1/menu-parallel/status/{session_id}",
+                "api_integration": api_mode,
+                "message": f"🎉 Complete OCR → Categorization → Parallel Processing pipeline started! {item_id} items queued with {api_mode}. APIs: Gemini OCR + OpenAI Categorization + Google Translate + OpenAI Description + Google Imagen 3"
+            }
+            
+        finally:
+            # 一時ファイル削除
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ OCR → Categorization → Parallel Processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"OCR to parallel processing failed: {str(e)}") 

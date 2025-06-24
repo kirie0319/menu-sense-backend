@@ -11,7 +11,6 @@ async def health_check():
     
     # インポートを移動 - 新しいサービス層から取得
     from app.services.auth import get_compatibility_variables
-    from app.services.realtime import get_ping_pong_sessions
     from app.services.ocr import get_ocr_service_status
     from app.services.category import get_category_service_status
     from app.services.translation import get_translation_service_status
@@ -27,8 +26,8 @@ async def health_check():
     IMAGEN_AVAILABLE = auth_vars["IMAGEN_AVAILABLE"]
     google_credentials = auth_vars["google_credentials"]
     
-    # リアルタイム通信情報を取得
-    ping_pong_sessions = get_ping_pong_sessions()
+    # SSEセッション情報（並列処理システム専用）
+    ping_pong_sessions = []  # 削除されたリアルタイムモジュールの代替
     
     # サービス状態の詳細情報
     services_detail = {}

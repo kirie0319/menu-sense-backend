@@ -1,6 +1,4 @@
 from .celery_app import celery_app, test_celery_connection, get_celery_info
-from .image_tasks import hello_world_task, test_image_chunk_task, get_task_info, advanced_image_chunk_task
-from .three_item_integration import process_three_items_complete
 from .utils import (
     create_image_chunks, validate_menu_data, create_chunk_summary, 
     generate_job_id, calculate_estimated_time,
@@ -13,11 +11,6 @@ __all__ = [
     "celery_app",
     "test_celery_connection",
     "get_celery_info",
-    "hello_world_task", 
-    "test_image_chunk_task",
-    "advanced_image_chunk_task",
-    "process_three_items_complete",
-    "get_task_info",
     "create_image_chunks",
     "validate_menu_data", 
     "create_chunk_summary",

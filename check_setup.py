@@ -27,7 +27,7 @@ def check_environment():
         if auth_status['available']:
             print(f"   ✅ 認証方法: {auth_status['method']}")
             print(f"   ✅ 認証ソース: {auth_status['source']}")
-                else:
+        else:
             print("   ❌ 認証情報が見つかりません")
             troubleshooting = get_auth_troubleshooting()
             for suggestion in troubleshooting[:5]:  # 最初の5つのサジェスチョンのみ表示

@@ -12,7 +12,7 @@ def create_celery_app():
         "image_processor",
         broker=redis_url,
         backend=redis_url,
-        include=["app.tasks.image_tasks", "app.tasks.translation_tasks", "app.tasks.description_tasks", "app.tasks.ocr_tasks", "app.tasks.pipeline_tasks", "app.tasks.categorization_tasks", "app.tasks.item_level_tasks", "app.tasks.menu_item_parallel_tasks"]
+        include=["app.tasks.ocr_tasks", "app.tasks.menu_item_parallel_tasks"]
     )
     
     # Celery最適化設定
@@ -46,37 +46,20 @@ def create_celery_app():
         task_send_sent_event=True,  # 送信イベント有効化
         worker_pool_restarts=True,  # ワーカープール再起動有効化
         
-        # タスクルーティング最適化
+        # タスクルーティング最適化（クリーンアップ後）
         task_routes={
-            'app.tasks.image_tasks.hello_world_task': {'queue': 'default'},
-            'app.tasks.image_tasks.test_image_chunk_task': {'queue': 'image_queue'},
-            'app.tasks.image_tasks.advanced_image_chunk_task': {'queue': 'image_queue'},
-            'app.tasks.image_tasks.real_image_chunk_task': {'queue': 'image_queue'},
-            # 翻訳タスクルーティング
-            'app.tasks.translation_tasks.translate_category_simple': {'queue': 'translation_queue'},
-            'app.tasks.translation_tasks.translate_category_with_fallback': {'queue': 'translation_queue'},
-            'app.tasks.translation_tasks.translate_menu_parallel': {'queue': 'translation_queue'},
-            # 詳細説明タスクルーティング
-            'app.tasks.description_tasks.add_descriptions_to_category': {'queue': 'description_queue'},
-            'app.tasks.description_tasks.add_descriptions_parallel_menu': {'queue': 'description_queue'},
             # OCRタスクルーティング
             'app.tasks.ocr_tasks.ocr_with_gemini': {'queue': 'ocr_queue'},
             'app.tasks.ocr_tasks.ocr_with_google_vision': {'queue': 'ocr_queue'},
             'app.tasks.ocr_tasks.ocr_parallel_multi_engine': {'queue': 'ocr_queue'},
-            # パイプラインタスクルーティング
-            'app.tasks.pipeline_tasks.full_pipeline_process': {'queue': 'pipeline_queue'},
-            'app.tasks.pipeline_tasks.category_stage45_pipeline': {'queue': 'pipeline_queue'},
-            'app.tasks.pipeline_tasks.multiple_images_pipeline': {'queue': 'pipeline_queue'},
-            # カテゴライズ並列化タスクルーティング
-            # アイテムレベル並列処理タスクルーティング（新機能）
-            'app.tasks.item_level_tasks.translate_single_item': {'queue': 'item_translation_queue'},
-            'app.tasks.item_level_tasks.process_items_batch': {'queue': 'item_batch_queue'},
-            'app.tasks.categorization_tasks.categorize_text_chunk': {'queue': 'categorization_queue'},
-            'app.tasks.categorization_tasks.categorize_menu_parallel': {'queue': 'categorization_queue'},
-            # SSE専用メニューアイテム並列処理タスクルーティング
-            'app.tasks.menu_item_parallel_tasks.sse_translate_menu_item': {'queue': 'sse_translate_queue'},
-            'app.tasks.menu_item_parallel_tasks.sse_generate_menu_description': {'queue': 'sse_description_queue'},
-            'app.tasks.menu_item_parallel_tasks.sse_generate_menu_image': {'queue': 'sse_image_queue'},
+            # 実API統合メニューアイテム並列処理タスクルーティング
+            'app.tasks.menu_item_parallel_tasks.real_translate_menu_item': {'queue': 'real_translate_queue'},
+            'app.tasks.menu_item_parallel_tasks.real_generate_menu_description': {'queue': 'real_description_queue'},
+            'app.tasks.menu_item_parallel_tasks.real_generate_menu_image': {'queue': 'real_image_queue'},
+            # テスト用タスクルーティング（後方互換性）
+            'app.tasks.menu_item_parallel_tasks.test_translate_menu_item': {'queue': 'translate_queue'},
+            'app.tasks.menu_item_parallel_tasks.test_generate_menu_description': {'queue': 'description_queue'},
+            'app.tasks.menu_item_parallel_tasks.test_generate_menu_image': {'queue': 'image_queue'},
         },
         
         # キュー設定
