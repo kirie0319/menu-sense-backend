@@ -1,0 +1,49 @@
+# Git関連
+.git
+.gitignore
+
+# Python関連
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv
+venv/
+.env
+*.egg-info/
+
+# ログファイル
+logs/*.log
+
+# テスト関連
+tests/
+test_*.py
+
+# IDE関連
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Docker関連
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 開発用ファイル
+README.md
+*.md
+env_example.txt
+env.docker.example
+
+# スクリプト
+start_workers_optimized.sh
+start_optimized_workers.sh
+worker_monitor.py
+
+# アップロードファイル（実行時にマウントするため）
+uploads/* 

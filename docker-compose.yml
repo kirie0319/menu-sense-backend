@@ -1,0 +1,89 @@
+services:
+  # Redis（Celeryのメッセージブローカー）
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # FastAPIサーバー
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env.docker
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ワーカー1: 翻訳専用
+  worker-translation:
+    build: .
+    command: celery -A app.tasks.celery_app worker --queues=real_translate_queue --concurrency=8 --hostname=translation_worker@%h --loglevel=debug --without-gossip --without-mingle
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_LOG_LEVEL=DEBUG
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env.docker
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ワーカー2: 詳細説明専用
+  worker-description:
+    build: .
+    command: celery -A app.tasks.celery_app worker --queues=real_description_queue --concurrency=6 --hostname=description_worker@%h --loglevel=debug --without-gossip --without-mingle
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_LOG_LEVEL=DEBUG
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env.docker
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ワーカー3: 画像生成専用
+  worker-image:
+    build: .
+    command: celery -A app.tasks.celery_app worker --queues=real_image_queue --concurrency=3 --hostname=image_worker@%h --loglevel=debug --without-gossip --without-mingle
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_LOG_LEVEL=DEBUG
+      - PYTHONUNBUFFERED=1
+    env_file:
+      - .env.docker
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  redis_data: 

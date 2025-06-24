@@ -15,6 +15,7 @@ except ImportError:
 
 from app.core.config import settings
 from .base import BaseImageService, ImageResult, ImageProvider
+from app.services.s3_storage import s3_storage
 
 class Imagen3Service(BaseImageService):
     """Imagen 3 APIを使用した画像生成サービス"""
@@ -58,12 +59,15 @@ class Imagen3Service(BaseImageService):
         japanese_name: str, 
         english_name: str, 
         description: str, 
-        category: str
+        category: str,
+        detailed_description: str = ""
     ) -> dict:
         """単一のメニューアイテムの画像を生成"""
         try:
-            # 画像生成用のプロンプト作成
-            prompt = self.create_image_prompt(japanese_name, english_name, description, category)
+            # 詳細説明を含むプロンプト作成
+            prompt = self.create_enhanced_image_prompt(
+                japanese_name, english_name, description, category, detailed_description
+            )
             
             if not self.validate_prompt_content(prompt):
                 raise ValueError("Invalid prompt content")
@@ -79,27 +83,30 @@ class Imagen3Service(BaseImageService):
             )
             
             if response.generated_images:
-                # 画像を保存
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = self.create_safe_filename(english_name, timestamp)
-                image_path = f"{settings.UPLOAD_DIR}/{filename}"
-                
-                # ディレクトリが存在しない場合は作成
-                os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-                
-                # 画像を保存
+                # 画像を取得
                 generated_image = response.generated_images[0]
                 image = Image.open(BytesIO(generated_image.image.image_bytes))
-                image.save(image_path)
+                
+                # ファイル名を生成
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = self.create_safe_filename(english_name, timestamp)
+                
+                # S3ストレージを試行、失敗時はローカル保存
+                image_url = await self._save_image_with_fallback(
+                    image, filename, japanese_name, english_name, description, 
+                    detailed_description, category, prompt
+                )
                 
                 # 結果を返す
                 return {
                     "japanese_name": japanese_name,
                     "english_name": english_name,
-                    "image_url": f"/{settings.UPLOAD_DIR}/{filename}",
-                    "image_path": image_path,
+                    "image_url": image_url,
+                    "image_path": f"{settings.UPLOAD_DIR}/{filename}" if not image_url or image_url.startswith('/') else None,
                     "prompt_used": prompt,
-                    "generation_success": True
+                    "generation_success": True,
+                    "storage_type": "s3" if image_url and not image_url.startswith('/') else "local",
+                    "detailed_description_used": bool(detailed_description)
                 }
             else:
                 return {
@@ -150,12 +157,13 @@ class Imagen3Service(BaseImageService):
                 japanese_name = item.get("japanese_name", "N/A")
                 english_name = item.get("english_name", "N/A")
                 description = item.get("description", "")
+                detailed_description = item.get("detailed_description", "")
                 
                 print(f"    🎨 Generating image for: {english_name} (item {i+1}/{len(chunk)})")
                 
-                # 単一画像生成
+                # 単一画像生成（詳細説明を含む）
                 image_result = await self.generate_single_image(
-                    japanese_name, english_name, description, category
+                    japanese_name, english_name, description, category, detailed_description
                 )
                 
                 chunk_results.append(image_result)
@@ -590,3 +598,115 @@ class Imagen3Service(BaseImageService):
                 "lighting": "professional"
             }
         }
+
+    def create_enhanced_image_prompt(
+        self, 
+        japanese_name: str, 
+        english_name: str, 
+        description: str, 
+        category: str,
+        detailed_description: str = ""
+    ) -> str:
+        """詳細説明を含む拡張画像プロンプトを作成"""
+        
+        # カテゴリ別のスタイル調整
+        category_styles = self.get_category_styles()
+        style = category_styles.get(category, "professional food photography")
+        
+        # プロンプトの基本構成
+        prompt_parts = []
+        
+        # 料理名
+        prompt_parts.append(f"Professional food photography of {english_name}")
+        
+        # 日本語名が利用可能な場合
+        if japanese_name and japanese_name != "N/A":
+            prompt_parts.append(f"({japanese_name})")
+        
+        # 基本説明
+        if description:
+            prompt_parts.append(f". {description[:100]}")
+        
+        # 詳細説明があれば追加
+        if detailed_description:
+            prompt_parts.append(f". {detailed_description[:150]}")
+        
+        # カテゴリ固有のスタイル
+        prompt_parts.append(f". {style}")
+        
+        # 高品質撮影の詳細指定
+        prompt_parts.append(", restaurant quality, high resolution, appetizing presentation")
+        prompt_parts.append(", professional lighting, clean background")
+        prompt_parts.append(", Japanese cuisine aesthetics, authentic plating")
+        
+        full_prompt = "".join(prompt_parts)
+        
+        # 文字数制限（Imagen 3の制限に合わせて）
+        if len(full_prompt) > 1000:
+            full_prompt = full_prompt[:1000]
+        
+        return full_prompt
+    
+    async def _save_image_with_fallback(
+        self,
+        image: Image.Image,
+        filename: str,
+        japanese_name: str,
+        english_name: str,
+        description: str,
+        detailed_description: str,
+        category: str,
+        prompt: str
+    ) -> str:
+        """
+        S3に画像を保存を試行し、失敗した場合はローカル保存にフォールバック
+        
+        Returns:
+            保存された画像のURL
+        """
+        
+        # メタデータを準備
+        metadata = {
+            "japanese_name": japanese_name,
+            "english_name": english_name,
+            "category": category,
+            "description": description[:100] if description else "",
+            "detailed_description": detailed_description[:100] if detailed_description else "",
+            "prompt_length": str(len(prompt)),
+            "generation_service": "imagen3"
+        }
+        
+        # S3への保存を試行
+        if s3_storage.is_available():
+            try:
+                print(f"    📤 Uploading image to S3: {filename}")
+                s3_url = s3_storage.upload_pil_image(
+                    image, 
+                    filename, 
+                    format="JPEG", 
+                    quality=95,
+                    metadata=metadata
+                )
+                
+                if s3_url:
+                    print(f"    ✅ S3 upload successful: {s3_url}")
+                    return s3_url
+                else:
+                    print(f"    ⚠️ S3 upload failed, falling back to local storage")
+            except Exception as e:
+                print(f"    ❌ S3 upload error: {e}, falling back to local storage")
+        else:
+            print(f"    ⚠️ S3 not available, using local storage")
+        
+        # ローカル保存にフォールバック
+        local_path = f"{settings.UPLOAD_DIR}/{filename}"
+        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+        
+        # JPEG形式で保存（ファイルサイズ最適化）
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+        
+        image.save(local_path, "JPEG", quality=95, optimize=True)
+        print(f"    💾 Local save successful: {local_path}")
+        
+        return f"/{settings.UPLOAD_DIR}/{filename}"
