@@ -36,7 +36,7 @@ class Settings(BaseModel):
     
     # S3設定（画像保存用）
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "menu-sense")
-    S3_REGION: str = os.getenv("S3_REGION", "us-east-1")
+    S3_REGION: str = os.getenv("S3_REGION", "ap-northeast-1")
     S3_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
     S3_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
     S3_IMAGE_PREFIX: str = os.getenv("S3_IMAGE_PREFIX", "generated-images")

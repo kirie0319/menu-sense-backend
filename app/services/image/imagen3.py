@@ -157,7 +157,8 @@ class Imagen3Service(BaseImageService):
                 japanese_name = item.get("japanese_name", "N/A")
                 english_name = item.get("english_name", "N/A")
                 description = item.get("description", "")
-                detailed_description = item.get("detailed_description", "")
+                # 詳細説明: OpenAIサービスがdescriptionフィールドに保存しているため、両方をチェック
+                detailed_description = item.get("detailed_description", "") or item.get("description", "")
                 
                 print(f"    🎨 Generating image for: {english_name} (item {i+1}/{len(chunk)})")
                 

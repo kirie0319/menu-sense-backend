@@ -204,6 +204,168 @@ class S3StorageService:
             logger.error(f"❌ S3 delete error: {e}")
             return False
     
+    def list_images(self, prefix: Optional[str] = None, max_keys: int = 1000) -> list:
+        """
+        S3バケットから画像ファイルのリストを取得
+        
+        Args:
+            prefix: フィルタリング用のプレフィックス（例: "generated-images/2024/01/01"）
+            max_keys: 最大取得件数
+            
+        Returns:
+            画像ファイル情報のリスト
+        """
+        if not self.is_available():
+            logger.error("❌ S3 service not available")
+            return []
+        
+        try:
+            # プレフィックスを設定（デフォルトは image_prefix）
+            search_prefix = prefix if prefix else self.image_prefix
+            
+            # S3からオブジェクトリストを取得
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix=search_prefix,
+                MaxKeys=max_keys
+            )
+            
+            images = []
+            if 'Contents' in response:
+                for obj in response['Contents']:
+                    # 画像ファイルのみフィルタリング
+                    if self._is_image_file(obj['Key']):
+                        # パブリックURLを生成
+                        public_url = settings.S3_PUBLIC_URL_TEMPLATE.format(
+                            bucket=self.bucket_name,
+                            region=self.region,
+                            key=obj['Key']
+                        )
+                        
+                        images.append({
+                            'key': obj['Key'],
+                            'url': public_url,
+                            'size': obj['Size'],
+                            'last_modified': obj['LastModified'],
+                            'filename': obj['Key'].split('/')[-1],  # ファイル名のみ
+                            'date_path': '/'.join(obj['Key'].split('/')[1:-1])  # 日付パス部分
+                        })
+            
+            logger.info(f"✅ Found {len(images)} images in S3 bucket")
+            return images
+            
+        except ClientError as e:
+            logger.error(f"❌ S3 list error: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"❌ Unexpected error listing S3 images: {e}")
+            return []
+    
+    def get_image_by_key(self, s3_key: str) -> Optional[dict]:
+        """
+        S3キーから画像情報を取得
+        
+        Args:
+            s3_key: S3キー
+            
+        Returns:
+            画像情報辞書またはNone
+        """
+        if not self.is_available():
+            return None
+        
+        try:
+            # オブジェクトのメタデータを取得
+            response = self.s3_client.head_object(Bucket=self.bucket_name, Key=s3_key)
+            
+            # パブリックURLを生成
+            public_url = settings.S3_PUBLIC_URL_TEMPLATE.format(
+                bucket=self.bucket_name,
+                region=self.region,
+                key=s3_key
+            )
+            
+            return {
+                'key': s3_key,
+                'url': public_url,
+                'size': response['ContentLength'],
+                'last_modified': response['LastModified'],
+                'content_type': response['ContentType'],
+                'metadata': response.get('Metadata', {}),
+                'filename': s3_key.split('/')[-1],
+                'date_path': '/'.join(s3_key.split('/')[1:-1])
+            }
+            
+        except ClientError as e:
+            logger.error(f"❌ S3 get image error: {e}")
+            return None
+    
+    def list_images_by_date(self, date_str: str) -> list:
+        """
+        指定日付の画像を取得
+        
+        Args:
+            date_str: 日付文字列（YYYY/MM/DD または YYYY-MM-DD）
+            
+        Returns:
+            画像ファイル情報のリスト
+        """
+        # 日付フォーマットを統一
+        formatted_date = date_str.replace('-', '/')
+        prefix = f"{self.image_prefix}/{formatted_date}"
+        
+        return self.list_images(prefix=prefix)
+    
+    def search_images_by_filename(self, filename_pattern: str) -> list:
+        """
+        ファイル名パターンで画像を検索
+        
+        Args:
+            filename_pattern: ファイル名パターン（部分一致）
+            
+        Returns:
+            マッチした画像ファイル情報のリスト
+        """
+        all_images = self.list_images()
+        
+        # ファイル名でフィルタリング
+        matching_images = []
+        for image in all_images:
+            if filename_pattern.lower() in image['filename'].lower():
+                matching_images.append(image)
+        
+        return matching_images
+    
+    def get_recent_images(self, limit: int = 50) -> list:
+        """
+        最新の画像を取得
+        
+        Args:
+            limit: 取得件数
+            
+        Returns:
+            最新の画像ファイル情報のリスト（最新順）
+        """
+        images = self.list_images(max_keys=limit * 2)  # 余裕を持って取得
+        
+        # 最終更新日時でソート（最新順）
+        images.sort(key=lambda x: x['last_modified'], reverse=True)
+        
+        return images[:limit]
+    
+    def _is_image_file(self, key: str) -> bool:
+        """
+        ファイルが画像かどうかを判定
+        
+        Args:
+            key: S3キー
+            
+        Returns:
+            画像ファイルかどうか
+        """
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
+        return any(key.lower().endswith(ext) for ext in image_extensions)
+    
     def _sanitize_metadata(self, metadata: dict) -> dict:
         """
         メタデータをS3で許可されるASCII文字のみに変換

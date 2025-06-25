@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from fastapi.staticfiles import StaticFiles
 import os
 
-from .endpoints import ocr, system, menu_item_parallel
+from .endpoints import ocr, system, menu_item_parallel, images
 from app.core.config import settings
 
 # APIルーターの作成
@@ -20,3 +20,6 @@ api_router.include_router(ocr.router, prefix="/ocr", tags=["OCR"])
 
 # メニューアイテム並列処理エンドポイントを追加（SSE専用システム）
 api_router.include_router(menu_item_parallel.router, prefix="/menu-parallel", tags=["Menu Item Parallel Processing"])
+
+# S3画像管理エンドポイントを追加
+api_router.include_router(images.router, prefix="/images", tags=["S3 Images"])
