@@ -2,6 +2,13 @@
 # 主要API認証情報
 # ==========================================
 
+# FastAPIサーバー設定
+HOST=0.0.0.0
+PORT=8000
+
+# Redis設定（Docker環境では redis://redis:6379/0）
+REDIS_URL=redis://localhost:6379/0
+
 # OpenAI API
 OPENAI_API_KEY=your_openai_api_key_here
 

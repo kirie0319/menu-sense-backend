@@ -221,7 +221,7 @@ python test_google_search.py --interactive
 ### 🌟 統一認証システム
 
 本アプリケーションは、複数の認証方法を一元化した統一認証システムを採用しています。
-詳細な設定とトラブルシューティングについては [統一認証システムガイド](UNIFIED_AUTH_GUIDE.md) をご覧ください。
+詳細な設定とトラブルシューティングについては [統一認証システムガイド](docs/UNIFIED_AUTH_GUIDE.md) をご覧ください。
 
 ### Google Vision API Setup (Stage 1 OCR Required)
 
