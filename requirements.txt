@@ -25,3 +25,6 @@ psutil
 boto3
 botocore
 sseclient-py
+
+sqlalchemy
+asyncpg

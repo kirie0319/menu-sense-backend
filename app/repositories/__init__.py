@@ -1,0 +1,1 @@
+# Repository layer for Menu Translation Database

@@ -9,6 +9,11 @@ from unittest.mock import Mock, AsyncMock
 from typing import Dict, Any, Optional
 from pathlib import Path
 
+# Database testing imports
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from testcontainers.postgres import PostgresContainer
+
 # プロジェクトルートをPythonパスに追加
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -251,10 +256,60 @@ def category_error_result():
     )
 
 
+# ===============================================
+# 🗄️ Database Testing Fixtures (NEW)
+# ===============================================
+
+@pytest.fixture(scope="session")
+def postgres_container():
+    """Start PostgreSQL test container for database tests"""
+    with PostgresContainer("postgres:15-alpine") as postgres:
+        yield postgres
+
+@pytest.fixture(scope="session") 
+async def test_engine(postgres_container):
+    """Create async engine for testing"""
+    connection_url = postgres_container.get_connection_url().replace(
+        "postgresql://", "postgresql+asyncpg://"
+    )
+    engine = create_async_engine(connection_url, echo=False)
+    
+    # Import models and create tables
+    from app.core.database import Base
+    from app.models.menu_translation import Session, MenuItem, ProcessingProvider, MenuItemImage, Category
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    yield engine
+    await engine.dispose()
+
+@pytest.fixture
+async def db_session(test_engine):
+    """Create clean database session for each test"""
+    async_session = sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    
+    async with async_session() as session:
+        try:
+            yield session
+        finally:
+            await session.rollback()
+
+@pytest.fixture
+async def db_session_with_commit(test_engine):
+    """Database session that commits changes (for integration tests)"""
+    async_session = sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    
+    async with async_session() as session:
+        yield session
+        await session.commit()
+
 # テスト環境の検証
 @pytest.fixture(autouse=True)
 def verify_test_environment():
     """テスト環境の検証"""
+    # Set testing environment variable
+    os.environ["TESTING"] = "true"
     # テスト用の一時ディレクトリが存在することを確認
     os.makedirs("uploads", exist_ok=True)
     yield

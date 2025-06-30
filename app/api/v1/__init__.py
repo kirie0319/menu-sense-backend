@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from fastapi.staticfiles import StaticFiles
 import os
 
-from .endpoints import ocr, system, menu_item_parallel, images
+from .endpoints import ocr, system, menu_item_parallel, images, menu_translation_db
 from app.core.config import settings
 
 # APIルーターの作成
@@ -23,3 +23,6 @@ api_router.include_router(menu_item_parallel.router, prefix="/menu-parallel", ta
 
 # S3画像管理エンドポイントを追加
 api_router.include_router(images.router, prefix="/images", tags=["S3 Images"])
+
+# Database-integrated menu translation endpoints
+api_router.include_router(menu_translation_db.router, prefix="/menu-translation", tags=["Menu Translation Database"])

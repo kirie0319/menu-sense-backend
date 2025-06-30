@@ -1,0 +1,15 @@
+# Test Dependencies for Menu Translation Database TDD (Simplified)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+factory-boy==3.3.0
+faker==19.12.0
+httpx==0.25.2
+pytest-mock==3.12.0
+
+# Database dependencies - simplified for now
+sqlalchemy>=2.0.36
+
+# Additional testing utilities
+freezegun==1.2.2
+responses==0.24.1
