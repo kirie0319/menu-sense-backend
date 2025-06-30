@@ -21,6 +21,15 @@ def get_database_url() -> str:
             db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif db_url.startswith("postgresql://"):
             db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        
+        # Add SSL mode for production (Railway requires this)
+        if "sslmode" not in db_url and os.getenv("RAILWAY_ENVIRONMENT") == "production":
+            # Add sslmode=require to the connection string
+            if "?" in db_url:
+                db_url += "&sslmode=require"
+            else:
+                db_url += "?sslmode=require"
+        
         return db_url
     
     # For testing, use test database
@@ -36,11 +45,22 @@ def get_database_url() -> str:
     
     return f"postgresql+asyncpg://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
-# Create async engine
+# Create async engine with production-ready settings
 engine = create_async_engine(
     get_database_url(),
     echo=os.getenv("DB_ECHO", "false").lower() == "true",
-    future=True
+    future=True,
+    # Connection pool settings for production
+    pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),  # 30 minutes
+    # Additional settings for Railway
+    connect_args={
+        "server_settings": {"jit": "off"},  # Disable JIT for compatibility
+        "command_timeout": 60,
+        "ssl": os.getenv("RAILWAY_ENVIRONMENT") == "production" if os.getenv("RAILWAY_ENVIRONMENT") else None
+    } if "asyncpg" in get_database_url() else {}
 )
 
 # Create async session factory
