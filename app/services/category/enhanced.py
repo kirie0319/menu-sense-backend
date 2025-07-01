@@ -1,0 +1,491 @@
+"""
+Enhanced Category Service - 強化版カテゴリ分類サービス
+新しい基盤クラスを使用した高度なカテゴリ分類サービス実装
+
+新機能:
+- 統一されたエラーハンドリング
+- 詳細な品質指標
+- パフォーマンス測定
+- 既存システムとの完全互換性
+"""
+import re
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+from pydantic import BaseModel, Field
+
+from app.services.base import (
+    BaseResult, BaseService, ErrorType,
+    ValidationError, APIError, ServiceUnavailableError, ProcessingError
+)
+from app.services.category.base import CategoryResult, BaseCategoryService
+from app.core.config import settings
+
+
+class EnhancedCategoryResult(BaseResult):
+    """
+    強化版カテゴリ分類結果クラス
+    
+    BaseResultを継承し、カテゴリ分類固有の機能を追加
+    既存のCategoryResultとの完全互換性を維持
+    """
+    
+    # カテゴリ分類固有フィールド
+    categories: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict, description="分類されたカテゴリ")
+    uncategorized: List[str] = Field(default_factory=list, description="未分類アイテム")
+    
+    # 新しい高度な機能
+    category_confidence: Dict[str, float] = Field(default_factory=dict, description="カテゴリごとの信頼度")
+    total_items: Optional[int] = Field(default=None, description="総アイテム数")
+    categorization_method: Optional[str] = Field(default=None, description="分類手法")
+    
+    # 品質指標（カテゴリ分類特化）
+    coverage_score: Optional[float] = Field(default=None, description="分類カバレッジ")
+    balance_score: Optional[float] = Field(default=None, description="カテゴリバランス")
+    accuracy_estimate: Optional[float] = Field(default=None, description="精度推定")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """辞書形式に変換（カテゴリ特化情報含む）"""
+        result = super().to_dict()
+        
+        # カテゴリ分類固有の情報を追加
+        result["categories"] = self.categories
+        result["uncategorized"] = self.uncategorized
+        
+        if self.category_confidence:
+            result["category_confidence"] = self.category_confidence
+        if self.total_items is not None:
+            result["total_items"] = self.total_items
+        if self.categorization_method:
+            result["categorization_method"] = self.categorization_method
+        if self.coverage_score is not None:
+            result["coverage_score"] = self.coverage_score
+        if self.balance_score is not None:
+            result["balance_score"] = self.balance_score
+        if self.accuracy_estimate is not None:
+            result["accuracy_estimate"] = self.accuracy_estimate
+            
+        return result
+    
+    def get_categorization_statistics(self) -> Dict[str, Any]:
+        """カテゴリ分類統計を取得"""
+        total_categorized = sum(len(items) for items in self.categories.values())
+        total_uncategorized = len(self.uncategorized)
+        total_items = total_categorized + total_uncategorized
+        
+        stats = {
+            "total_items": total_items,
+            "categorized_items": total_categorized,
+            "uncategorized_items": total_uncategorized,
+            "categories_count": len(self.categories),
+            "categorization_rate": total_categorized / total_items if total_items > 0 else 0,
+            "categories_distribution": {
+                category: len(items) 
+                for category, items in self.categories.items()
+            },
+            "largest_category": max(self.categories.keys(), key=lambda k: len(self.categories[k])) if self.categories else None,
+            "smallest_category": min(self.categories.keys(), key=lambda k: len(self.categories[k])) if self.categories else None
+        }
+        
+        # 既存フィールドを更新
+        self.total_items = total_items
+        
+        return stats
+
+
+class EnhancedCategoryService(BaseService):
+    """
+    強化版カテゴリ分類サービス
+    
+    BaseServiceを継承し、統一されたエラーハンドリング、
+    パフォーマンス測定、品質指標を提供
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.provider = "enhanced_category"
+        self._category_stats = {
+            "total_categorizations": 0,
+            "successful_categorizations": 0,
+            "average_items_per_categorization": 0.0,
+            "categories_used": set(),
+            "most_common_category": None
+        }
+    
+    def is_available(self) -> bool:
+        """サービス利用可能性チェック"""
+        # 必要な設定が存在するかチェック
+        required_settings = ["OPENAI_API_KEY"]
+        return all(hasattr(settings, key) and getattr(settings, key) for key in required_settings)
+    
+    def get_capabilities(self) -> List[str]:
+        """カテゴリ分類サービスの機能一覧"""
+        return [
+            "japanese_menu_categorization",
+            "menu_item_extraction",
+            "price_detection",
+            "structured_output",
+            "quality_assessment",
+            "performance_monitoring",
+            "error_recovery",
+            "confidence_scoring",
+            "coverage_analysis",
+            "balance_evaluation"
+        ]
+    
+    def get_default_categories(self) -> List[str]:
+        """デフォルトのカテゴリリストを取得"""
+        return ["前菜", "メイン", "ドリンク", "デザート", "サイド", "スープ"]
+    
+    async def categorize_menu(
+        self, 
+        extracted_text: str, 
+        session_id: Optional[str] = None
+    ) -> EnhancedCategoryResult:
+        """
+        メニューテキストをカテゴリ分類（強化版）
+        
+        エラーハンドリング、パフォーマンス測定、品質評価を含む
+        """
+        start_time = datetime.now()
+        
+        try:
+            # 入力検証
+            self._validate_text_input(extracted_text)
+            
+            # カテゴリ分類実行
+            result = await self._perform_categorization_with_monitoring(
+                extracted_text, 
+                session_id, 
+                start_time
+            )
+            
+            # 統計更新
+            self._update_category_stats(result)
+            
+            return result
+            
+        except ValidationError as e:
+            # バリデーションエラーを適切にハンドル
+            processing_time = (datetime.now() - start_time).total_seconds()
+            self._update_performance_stats(processing_time, False)
+            
+            return self._create_error_result(
+                str(e),
+                EnhancedCategoryResult,
+                ErrorType.VALIDATION_ERROR,
+                e.suggestions,
+                context={
+                    "extracted_text_length": len(extracted_text) if extracted_text else 0,
+                    "session_id": session_id,
+                    "field_name": getattr(e, 'field_name', None)
+                }
+            )
+            
+        except APIError as e:
+            # APIエラーを適切にハンドル
+            processing_time = (datetime.now() - start_time).total_seconds()
+            self._update_performance_stats(processing_time, False)
+            
+            return self._create_error_result(
+                str(e),
+                EnhancedCategoryResult,
+                ErrorType.API_ERROR,
+                e.suggestions,
+                context={
+                    "extracted_text_length": len(extracted_text) if extracted_text else 0,
+                    "session_id": session_id,
+                    "api_service": getattr(e, 'api_service', None),
+                    "status_code": getattr(e, 'status_code', None)
+                }
+            )
+            
+        except ServiceUnavailableError as e:
+            # サービス利用不可エラーを適切にハンドル
+            processing_time = (datetime.now() - start_time).total_seconds()
+            self._update_performance_stats(processing_time, False)
+            
+            return self._create_error_result(
+                str(e),
+                EnhancedCategoryResult,
+                ErrorType.SERVICE_UNAVAILABLE,
+                e.suggestions,
+                context={
+                    "extracted_text_length": len(extracted_text) if extracted_text else 0,
+                    "session_id": session_id,
+                    "service_name": getattr(e, 'service_name', None)
+                }
+            )
+            
+        except Exception as e:
+            # その他の予期しない例外を適切にハンドル
+            processing_time = (datetime.now() - start_time).total_seconds()
+            self._update_performance_stats(processing_time, False)
+            
+            return self._create_error_result(
+                f"Category processing failed: {str(e)}",
+                EnhancedCategoryResult,
+                ErrorType.PROCESSING_ERROR,
+                suggestions=[
+                    "システム管理者に連絡してください",
+                    "しばらく時間をおいて再試行してください",
+                    "入力テキストの内容を確認してください"
+                ],
+                context={
+                    "extracted_text_length": len(extracted_text) if extracted_text else 0,
+                    "session_id": session_id,
+                    "exception_type": type(e).__name__,
+                    "exception_details": str(e)
+                }
+            )
+    
+    def _validate_text_input(self, extracted_text: str) -> None:
+        """入力テキストの検証（強化版）"""
+        if not extracted_text or not extracted_text.strip():
+            raise ValidationError(
+                "Invalid extracted text: empty or None",
+                field_name="extracted_text",
+                suggestions=[
+                    "有効なメニューテキストを提供してください",
+                    "OCR結果が空でないか確認してください"
+                ]
+            )
+        
+        # 最小文字数チェック
+        if len(extracted_text.strip()) < 5:
+            raise ValidationError(
+                f"Extracted text too short: {len(extracted_text)} characters (minimum: 5)",
+                field_name="extracted_text",
+                suggestions=[
+                    "より長いメニューテキストを提供してください",
+                    "OCRの精度を確認してください",
+                    "画像の品質を改善してください"
+                ]
+            )
+        
+        # 最大文字数チェック（極端に長いテキストを防ぐ）
+        max_length = getattr(settings, 'MAX_MENU_TEXT_LENGTH', 50000)
+        if len(extracted_text) > max_length:
+            raise ValidationError(
+                f"Extracted text too long: {len(extracted_text)} characters (maximum: {max_length})",
+                field_name="extracted_text",
+                suggestions=[
+                    f"テキストを{max_length}文字以下にしてください",
+                    "テキストを分割して処理してください"
+                ]
+            )
+    
+    async def _perform_categorization_with_monitoring(
+        self,
+        extracted_text: str,
+        session_id: Optional[str],
+        start_time: datetime
+    ) -> EnhancedCategoryResult:
+        """監視機能付きカテゴリ分類実行"""
+        
+        try:
+            # 実際のカテゴリ分類処理（サブクラスで実装）
+            result = await self._perform_categorization(extracted_text, session_id)
+            
+            # 処理時間設定
+            result.set_processing_time(start_time)
+            
+            # カテゴリ分類統計計算
+            category_stats = result.get_categorization_statistics()
+            
+            # 品質評価
+            quality_metrics = self._assess_categorization_quality(result, category_stats, extracted_text)
+            result.set_quality_metrics(**quality_metrics)
+            
+            # 分類手法情報設定
+            result.categorization_method = "enhanced_category_v2"
+            
+            # メタデータ強化
+            result.add_metadata("categorization_statistics", category_stats)
+            result.add_metadata("processing_details", {
+                "text_length": len(extracted_text),
+                "session_id": session_id,
+                "processing_timestamp": datetime.now().isoformat(),
+                "default_categories": self.get_default_categories()
+            })
+            
+            return result
+            
+        except Exception as e:
+            # カテゴリ分類固有のエラーハンドリング
+            if "API" in str(e) or "quota" in str(e).lower():
+                raise APIError(
+                    f"Category API error: {str(e)}",
+                    api_service="openai_category",
+                    suggestions=[
+                        "APIキーを確認してください",
+                        "API利用制限を確認してください",
+                        "しばらく時間をおいて再試行してください"
+                    ]
+                )
+            else:
+                raise Exception(f"Category processing failed: {str(e)}")
+    
+    async def _perform_categorization(
+        self, 
+        extracted_text: str, 
+        session_id: Optional[str] = None
+    ) -> EnhancedCategoryResult:
+        """
+        実際のカテゴリ分類処理（サブクラスでオーバーライド）
+        
+        このメソッドは具体的なカテゴリ分類エンジン（OpenAI等）
+        で実装される
+        """
+        # デフォルト実装（テスト用）
+        # 簡単なパターンマッチングによる基本的な分類
+        categories = self._basic_pattern_categorization(extracted_text)
+        
+        return self._create_success_result(
+            EnhancedCategoryResult,
+            categories=categories,
+            uncategorized=[]
+        )
+    
+    def _basic_pattern_categorization(self, text: str) -> Dict[str, List[Dict[str, Any]]]:
+        """基本的なパターンマッチングによるカテゴリ分類（フォールバック用）"""
+        categories = {
+            "前菜": [],
+            "メイン": [],
+            "ドリンク": [],
+            "デザート": []
+        }
+        
+        # 簡単なキーワードベースの分類
+        lines = text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 価格抽出
+            price_match = re.search(r'[¥￥]\s*(\d+(?:,\d+)*)', line)
+            price = price_match.group() if price_match else ""
+            
+            # 商品名（価格以外の部分）
+            name = re.sub(r'[¥￥]\s*\d+(?:,\d+)*', '', line).strip()
+            if not name:
+                continue
+            
+            item = {"name": name, "price": price}
+            
+            # キーワードベースの分類
+            if any(keyword in line for keyword in ["サラダ", "前菜", "おつまみ", "appetizer"]):
+                categories["前菜"].append(item)
+            elif any(keyword in line for keyword in ["ビール", "酒", "wine", "cocktail", "drink", "ドリンク", "飲み物"]):
+                categories["ドリンク"].append(item)
+            elif any(keyword in line for keyword in ["デザート", "アイス", "cake", "dessert", "sweet"]):
+                categories["デザート"].append(item)
+            else:
+                categories["メイン"].append(item)
+        
+        return categories
+    
+    def _assess_categorization_quality(
+        self, 
+        result: EnhancedCategoryResult, 
+        category_stats: Dict[str, Any],
+        original_text: str
+    ) -> Dict[str, float]:
+        """カテゴリ分類結果の品質を評価"""
+        
+        quality_score = 0.0
+        confidence = 0.0
+        
+        total_items = category_stats["total_items"]
+        categorization_rate = category_stats["categorization_rate"]
+        categories_count = category_stats["categories_count"]
+        
+        # カバレッジ評価
+        coverage_score = categorization_rate  # 分類率
+        
+        # バランス評価
+        if categories_count > 0:
+            items_per_category = [len(items) for items in result.categories.values()]
+            max_items = max(items_per_category) if items_per_category else 0
+            min_items = min(items_per_category) if items_per_category else 0
+            
+            # バランススコア（最大と最小の差が少ないほど高い）
+            if max_items > 0:
+                balance_score = 1.0 - (max_items - min_items) / max_items
+            else:
+                balance_score = 1.0
+        else:
+            balance_score = 0.0
+        
+        # 総合品質スコア
+        if total_items > 0:
+            quality_score += 0.4 * coverage_score  # カバレッジ重視
+            quality_score += 0.2 * balance_score   # バランス
+            
+            if categories_count > 0:
+                quality_score += 0.2  # カテゴリが存在
+            
+            if categories_count >= 2:
+                quality_score += 0.1  # 複数カテゴリ
+            
+            if len(original_text) > 100:
+                quality_score += 0.1  # 十分なテキスト量
+        
+        # 信頼度は品質スコアを基に計算
+        confidence = min(quality_score, 1.0)
+        
+        # 結果に品質指標を設定
+        result.coverage_score = coverage_score
+        result.balance_score = balance_score
+        result.accuracy_estimate = quality_score
+        
+        return {
+            "quality_score": quality_score,
+            "confidence": confidence
+        }
+    
+    def _update_category_stats(self, result: EnhancedCategoryResult) -> None:
+        """カテゴリ分類統計を更新"""
+        self._category_stats["total_categorizations"] += 1
+        
+        if result.success:
+            self._category_stats["successful_categorizations"] += 1
+            
+            # 平均アイテム数を更新
+            if result.total_items:
+                total_categorizations = self._category_stats["successful_categorizations"]
+                current_avg = self._category_stats["average_items_per_categorization"]
+                self._category_stats["average_items_per_categorization"] = (
+                    (current_avg * (total_categorizations - 1) + result.total_items) / total_categorizations
+                )
+            
+            # 使用されたカテゴリを追加
+            for category in result.categories.keys():
+                self._category_stats["categories_used"].add(category)
+            
+            # 最も多いカテゴリを更新
+            if result.categories:
+                largest_category = max(result.categories.keys(), key=lambda k: len(result.categories[k]))
+                self._category_stats["most_common_category"] = largest_category
+    
+    def create_compatible_result(self, enhanced_result: EnhancedCategoryResult) -> CategoryResult:
+        """既存CategoryResultとの互換性のため変換"""
+        return CategoryResult(
+            success=enhanced_result.success,
+            categories=enhanced_result.categories,
+            uncategorized=enhanced_result.uncategorized,
+            error=enhanced_result.error,
+            metadata=enhanced_result.metadata
+        )
+    
+    def get_category_statistics(self) -> Dict[str, Any]:
+        """カテゴリ分類固有の統計を取得"""
+        stats = self._category_stats.copy()
+        stats["categories_used"] = list(stats["categories_used"])
+        
+        if stats["total_categorizations"] > 0:
+            stats["success_rate"] = stats["successful_categorizations"] / stats["total_categorizations"]
+        else:
+            stats["success_rate"] = 0.0
+        
+        return stats 
