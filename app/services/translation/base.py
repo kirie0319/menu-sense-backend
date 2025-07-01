@@ -1,33 +1,25 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, List
-from pydantic import BaseModel
+from dataclasses import dataclass, field
 from enum import Enum
+from app.services.base_result import BaseServiceResult
 
 class TranslationProvider(str, Enum):
     """翻訳プロバイダーの定義"""
     GOOGLE_TRANSLATE = "google_translate"
     OPENAI = "openai"
 
-class TranslationResult(BaseModel):
+@dataclass
+class TranslationResult(BaseServiceResult):
     """翻訳結果を格納するクラス"""
-    
-    success: bool
-    translated_categories: Dict[str, List[Dict]] = {}
+    translated_categories: Dict[str, List[Dict]] = field(default_factory=dict)
     translation_method: str = ""
-    error: Optional[str] = None
-    metadata: Dict = {}
     
     def to_dict(self) -> Dict:
         """辞書形式に変換"""
-        result = {
-            "success": self.success,
-            "translated_categories": self.translated_categories,
-            "translation_method": self.translation_method
-        }
-        if self.error:
-            result["error"] = self.error
-        if self.metadata:
-            result.update(self.metadata)
+        result = super().to_dict()
+        result["translated_categories"] = self.translated_categories
+        result["translation_method"] = self.translation_method
         return result
 
 class BaseTranslationService(ABC):

@@ -1,33 +1,19 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Union
 import os
+from dataclasses import dataclass
 from app.core.config import settings
+from app.services.base_result import BaseServiceResult
 
-class OCRResult:
+@dataclass
+class OCRResult(BaseServiceResult):
     """OCR処理結果を格納するクラス"""
-    
-    def __init__(
-        self, 
-        success: bool, 
-        extracted_text: str = "", 
-        error: str = None, 
-        metadata: Dict = None
-    ):
-        self.success = success
-        self.extracted_text = extracted_text
-        self.error = error
-        self.metadata = metadata or {}
+    extracted_text: Optional[str] = ""
     
     def to_dict(self) -> Dict:
         """辞書形式に変換"""
-        result = {
-            "success": self.success,
-            "extracted_text": self.extracted_text
-        }
-        if self.error:
-            result["error"] = self.error
-        if self.metadata:
-            result.update(self.metadata)
+        result = super().to_dict()
+        result["extracted_text"] = self.extracted_text
         return result
 
 class BaseOCRService(ABC):

@@ -1,37 +1,29 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, List
-from pydantic import BaseModel
+from dataclasses import dataclass, field
 from enum import Enum
 import re
+from app.services.base_result import BaseServiceResult
 
 class ImageProvider(str, Enum):
     """画像生成プロバイダーの定義"""
     IMAGEN3 = "imagen3"
 
-class ImageResult(BaseModel):
+@dataclass
+class ImageResult(BaseServiceResult):
     """画像生成結果を格納するクラス"""
-    
-    success: bool
-    images_generated: Dict[str, List[Dict]] = {}
+    images_generated: Dict[str, List[Dict]] = field(default_factory=dict)
     total_images: int = 0
     total_items: int = 0
     image_method: str = ""
-    error: Optional[str] = None
-    metadata: Dict = {}
     
     def to_dict(self) -> Dict:
         """辞書形式に変換"""
-        result = {
-            "success": self.success,
-            "images_generated": self.images_generated,
-            "total_images": self.total_images,
-            "total_items": self.total_items,
-            "image_method": self.image_method
-        }
-        if self.error:
-            result["error"] = self.error
-        if self.metadata:
-            result.update(self.metadata)
+        result = super().to_dict()
+        result["images_generated"] = self.images_generated
+        result["total_images"] = self.total_images
+        result["total_items"] = self.total_items
+        result["image_method"] = self.image_method
         return result
 
 class BaseImageService(ABC):

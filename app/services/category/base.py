@@ -1,34 +1,26 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, List
-from pydantic import BaseModel
+from dataclasses import dataclass, field
 from enum import Enum
 from app.core.config import settings
+from app.services.base_result import BaseServiceResult
 
 class CategoryProvider(Enum):
     """カテゴリ分類プロバイダーの列挙型"""
     OPENAI = "openai"
     GOOGLE_TRANSLATE = "google_translate"
 
-class CategoryResult(BaseModel):
+@dataclass
+class CategoryResult(BaseServiceResult):
     """カテゴリ分類結果を格納するクラス"""
-    
-    success: bool
-    categories: Dict[str, List[Dict]] = {}
-    uncategorized: List[str] = []
-    error: Optional[str] = None
-    metadata: Dict = {}
+    categories: Dict[str, List[Dict]] = field(default_factory=dict)
+    uncategorized: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict:
         """辞書形式に変換"""
-        result = {
-            "success": self.success,
-            "categories": self.categories,
-            "uncategorized": self.uncategorized
-        }
-        if self.error:
-            result["error"] = self.error
-        if self.metadata:
-            result.update(self.metadata)
+        result = super().to_dict()
+        result["categories"] = self.categories
+        result["uncategorized"] = self.uncategorized
         return result
 
 class BaseCategoryService(ABC):

@@ -1,32 +1,24 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, List
-from pydantic import BaseModel
+from dataclasses import dataclass, field
 from enum import Enum
+from app.services.base_result import BaseServiceResult
 
 class DescriptionProvider(str, Enum):
     """詳細説明プロバイダーの定義"""
     OPENAI = "openai"
 
-class DescriptionResult(BaseModel):
+@dataclass
+class DescriptionResult(BaseServiceResult):
     """詳細説明生成結果を格納するクラス"""
-    
-    success: bool
-    final_menu: Dict[str, List[Dict]] = {}
+    final_menu: Dict[str, List[Dict]] = field(default_factory=dict)
     description_method: str = ""
-    error: Optional[str] = None
-    metadata: Dict = {}
     
     def to_dict(self) -> Dict:
         """辞書形式に変換"""
-        result = {
-            "success": self.success,
-            "final_menu": self.final_menu,
-            "description_method": self.description_method
-        }
-        if self.error:
-            result["error"] = self.error
-        if self.metadata:
-            result.update(self.metadata)
+        result = super().to_dict()
+        result["final_menu"] = self.final_menu
+        result["description_method"] = self.description_method
         return result
 
 class BaseDescriptionService(ABC):
