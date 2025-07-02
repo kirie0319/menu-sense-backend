@@ -11,13 +11,13 @@ Enhanced OCR Service - 強化版OCRサービス
 import os
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.services.base import (
     BaseResult, BaseService, ErrorType,
     ValidationError, FileError, APIError, ServiceUnavailableError
 )
-from app.services.ocr.base import OCRResult, BaseOCRService
+from app.services.ocr.base import OCRResult
 from app.core.config import settings
 
 

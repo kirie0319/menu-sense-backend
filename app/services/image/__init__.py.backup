@@ -224,8 +224,40 @@ class ImageServiceManager:
 image_manager = ImageServiceManager()
 
 # 便利な関数をエクスポート
-# NOTE: 非推奨のgenerate_images()関数は削除されました。
-# 新しい実装では /api/v1/image/generate-async を使用してください。
+async def generate_images(
+    final_menu: Dict, 
+    session_id: Optional[str] = None
+) -> ImageResult:
+    """
+    ⚠️ **DEPRECATED**: この関数は非推奨です。代わりに非同期処理 `/api/v1/image/generate-async` を使用してください。
+    
+    Imagen 3で画像生成する便利関数（同期処理 - 将来削除予定）
+    
+    Args:
+        final_menu: 詳細説明付きメニューデータ
+        session_id: セッションID（進行状況通知用）
+        
+    Returns:
+        ImageResult: 画像生成結果
+        
+    Note:
+        この関数は互換性のためにのみ残されています。
+        新しい実装では AsyncImageManager (/generate-async) を使用することを強く推奨します。
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # 非推奨警告を出力
+    logger.warning(
+        "⚠️ DEPRECATED: generate_images() is deprecated and will be removed in future versions. "
+        "Please use AsyncImageManager (/api/v1/image/generate-async) for new implementations."
+    )
+    logger.warning(
+        f"📊 Called with {sum(len(items) for items in final_menu.values())} items. "
+        "Consider using async processing for better performance and scalability."
+    )
+    
+    return await image_manager.generate_images_with_imagen3(final_menu, session_id)
 
 def get_image_service_status() -> Dict[str, Dict]:
     """画像生成サービスの状態を取得する便利関数"""
@@ -255,7 +287,7 @@ def combine_menu_with_images(final_menu: Dict, images_generated: Dict) -> Dict:
 __all__ = [
     "ImageResult",
     "ImageProvider",
-    # "generate_images",  # REMOVED: deprecated function
+    "generate_images",
     "get_image_service_status", 
     "get_supported_categories",
     "get_image_features",

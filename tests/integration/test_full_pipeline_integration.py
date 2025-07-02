@@ -21,7 +21,7 @@ from pathlib import Path
 from app.models.menu_translation import Base, Session, MenuItem
 from app.repositories.menu_translation_repository import MenuTranslationRepository
 from app.services.menu_translation_service import MenuTranslationService
-from app.services.json_migration_service import JSONMigrationService
+# JSONMigrationService removed - migration functionality no longer needed
 
 
 class TestFullPipelineIntegration:
@@ -55,10 +55,7 @@ class TestFullPipelineIntegration:
         """Create service instance"""
         return MenuTranslationService(repository, redis_client=None)
     
-    @pytest.fixture
-    def migration_service(self, repository):
-        """Create migration service instance"""
-        return JSONMigrationService(repository)
+    # Migration service fixture removed - functionality no longer needed
     
     @pytest.fixture
     def sample_json_data(self):
@@ -227,76 +224,18 @@ class TestFullPipelineIntegration:
         assert full_session.menu_items[0].description.startswith("Japanese curry")
         assert full_session.menu_items[0].images[0].image_url == "https://test.com/curry.jpg"
     
-    async def test_json_migration_to_database_integration(
-        self, migration_service, service, sample_json_data
+    # Migration test completely removed - JSON migration functionality no longer needed
+    @pytest.mark.skip(reason="JSON migration functionality has been removed")
+    async def test_json_migration_to_database_integration_DISABLED(
+        self, service, sample_json_data
     ):
         """
-        Test complete JSON migration flow
+        Test complete JSON migration flow - DISABLED
         
-        This validates that existing JSON files can be migrated to database
-        and accessed through the new system.
+        Migration functionality has been removed as it's no longer needed.
+        This test is skipped as the JSONMigrationService has been deleted.
         """
-        # 1. Create temporary JSON file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(sample_json_data, f, indent=2)
-            temp_json_path = f.name
-        
-        try:
-            # 2. Migrate single file
-            result = await migration_service._migrate_single_file(temp_json_path)
-            
-            assert result["success"] is True
-            assert result["session_id"] == "integration_test_session"
-            assert result["items_count"] == 2
-            
-            # 3. Verify session was created correctly
-            session = await service.get_session_with_items("integration_test_session")
-            
-            assert session.session_id == "integration_test_session"
-            assert session.total_items == 2
-            assert session.status == "completed"
-            assert len(session.menu_items) == 2
-            
-            # 4. Verify menu items were migrated correctly
-            sushi_item = next(item for item in session.menu_items if item.item_id == 0)
-            ramen_item = next(item for item in session.menu_items if item.item_id == 1)
-            
-            # Sushi item verification
-            assert sushi_item.japanese_text == "寿司"
-            assert sushi_item.english_text == "Sushi"
-            assert sushi_item.category == "Main Dishes"
-            assert sushi_item.description == "Fresh raw fish over seasoned rice"
-            assert sushi_item.translation_status == "completed"
-            assert sushi_item.description_status == "completed"
-            assert sushi_item.image_status == "completed"
-            
-            # Verify providers were recorded
-            assert len(sushi_item.providers) == 3  # translation, description, image
-            assert len(sushi_item.images) == 1
-            assert sushi_item.images[0].image_url == "https://test.com/sushi.jpg"
-            
-            # Ramen item verification
-            assert ramen_item.japanese_text == "ラーメン"
-            assert ramen_item.english_text == "Ramen"
-            assert ramen_item.description == "Japanese noodle soup with rich broth"
-            
-            # 5. Test search functionality works on migrated data
-            search_results = await service.search_menu_items("sushi", None, 10)
-            assert len(search_results) == 1
-            assert search_results[0].japanese_text == "寿司"
-            
-            # 6. Test progress calculation on migrated data
-            progress = await service.get_real_time_progress("integration_test_session")
-            assert progress.total_items == 2
-            assert progress.translation_completed == 2
-            assert progress.description_completed == 2
-            assert progress.image_completed == 2
-            assert progress.fully_completed == 2
-            assert progress.progress_percentage == 100.0
-            
-        finally:
-            # Cleanup temp file
-            os.unlink(temp_json_path)
+        pass  # Test completely disabled
     
     async def test_search_across_multiple_sessions(self, service):
         """

@@ -11,13 +11,13 @@ Enhanced Category Service - 強化版カテゴリ分類サービス
 import re
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.services.base import (
     BaseResult, BaseService, ErrorType,
-    ValidationError, APIError, ServiceUnavailableError, ProcessingError
+    ValidationError, APIError, ServiceUnavailableError
 )
-from app.services.category.base import CategoryResult, BaseCategoryService
+from app.services.category.base import CategoryResult
 from app.core.config import settings
 
 

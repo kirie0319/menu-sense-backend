@@ -1,31 +1,31 @@
-# Base service classes for menu sensor backend
-"""
-このモジュールは段階的リファクタリングのための新しい基底クラスを提供します。
-既存のサービスには影響を与えません。
-"""
-
+# Base service classes and utilities for enhanced service implementations
 from .result import BaseResult
 from .service import BaseService
 from .exceptions import (
     ErrorType,
     MenuSensorServiceError,
     ValidationError,
-    FileError,
-    APIError,
     ServiceUnavailableError,
     ProcessingError,
+    FileError,
+    APIError,
     create_error_suggestions
 )
 
 __all__ = [
-    'BaseResult', 
+    # Base classes
+    'BaseResult',
     'BaseService',
+    
+    # Exception types
     'ErrorType',
     'MenuSensorServiceError',
-    'ValidationError',
-    'FileError',
-    'APIError',
+    'ValidationError', 
     'ServiceUnavailableError',
     'ProcessingError',
+    'FileError',
+    'APIError',
+    
+    # Utility functions
     'create_error_suggestions'
 ] 
