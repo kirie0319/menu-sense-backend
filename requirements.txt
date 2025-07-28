@@ -29,3 +29,7 @@ sseclient-py
 sqlalchemy
 asyncpg
 psycopg2-binary
+
+# test package
+pytest
+pytest-asyncio

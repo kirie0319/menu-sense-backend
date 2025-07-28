@@ -1,0 +1,97 @@
+# Function Calling スキーマ - メニュー構造カテゴライズ用
+menu_structure:
+  name: "categorize_menu_structure"
+  description: "メニューの位置情報付きデータを分析して構造化されたカテゴリ情報を返します"
+  parameters:
+    type: "object"
+    properties:
+      menu:
+        type: "object"
+        properties:
+          overall_summary:
+            type: "object"
+            properties:
+              main_categories:
+                type: "array"
+                items:
+                  type: "string"
+                description: "主要カテゴリ名の配列"
+              note:
+                type: "string"
+                description: "全体的な注記"
+            required: ["main_categories", "note"]
+          categories:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                name:
+                  type: "string"
+                  description: "カテゴリ名（英語）"
+                japanese_name:
+                  type: "string"
+                  description: "カテゴリ名（日本語）"
+                header_y_coordinate:
+                  type: "number"
+                  description: "ヘッダーのY座標"
+                subcategories:
+                  type: "array"
+                  items:
+                    type: "object"
+                    properties:
+                      name:
+                        type: "string"
+                      japanese_name:
+                        type: "string"
+                      x_coordinate:
+                        type: "number"
+                      y_coordinate:
+                        type: "number"
+                    required: ["name", "japanese_name", "x_coordinate", "y_coordinate"]
+                items:
+                  type: "array"
+                  items:
+                    type: "object"
+                    properties:
+                      name:
+                        type: "string"
+                        description: "商品名"
+                      price:
+                        type: "string"
+                        description: "価格"
+                      notes:
+                        type: "string"
+                        description: "備考（オプション）"
+                    required: ["name", "price"]
+                category_notes:
+                  type: "string"
+                  description: "カテゴリの注記（オプション）"
+              required: ["name", "japanese_name", "header_y_coordinate", "items"]
+          other_texts:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                text:
+                  type: "string"
+                y_coordinate:
+                  type: "number"
+                description:
+                  type: "string"
+              required: ["text", "y_coordinate", "description"]
+          summary_table:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                category:
+                  type: "string"
+                example_items:
+                  type: "array"
+                  items:
+                    type: "string"
+                price_range:
+                  type: "string"
+              required: ["category", "example_items", "price_range"]
+        required: ["overall_summary", "categories", "other_texts", "summary_table"]
+    required: ["menu"] 

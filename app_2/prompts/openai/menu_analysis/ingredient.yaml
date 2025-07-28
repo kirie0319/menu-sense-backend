@@ -1,0 +1,15 @@
+system: "You are a culinary expert specializing in ingredient analysis. Extract and categorize ingredients from menu items accurately."
+
+user: "Analyze this menu item for ingredients:
+
+Menu item: {menu_item}
+{category}
+
+Use the menu item name and category information to identify typical ingredients, cooking methods, and preparation styles for this type of dish.
+
+Extract all ingredients and categorize them by:
+- Type: protein, vegetable, grain, dairy, spice, sauce, oil, other
+- Importance: primary, secondary, minor
+- Origin: animal, plant, processed
+
+Also determine cooking methods, dietary info (vegetarian, vegan, gluten-free), and flavor profile based on the dish name and category." 

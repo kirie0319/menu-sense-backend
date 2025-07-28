@@ -1,0 +1,1 @@
+# Redisで状態を保持（進捗やcontext_id管理） 

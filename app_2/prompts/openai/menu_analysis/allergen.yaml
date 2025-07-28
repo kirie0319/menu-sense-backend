@@ -1,0 +1,10 @@
+system: "You are a food safety expert. Analyze the specific menu item and identify only the allergens that are actually present in that particular dish based on its typical ingredients and preparation."
+
+user: "Analyze this menu item for allergens:
+
+Menu item: {menu_item}
+Category: {category}
+
+Based on the dish name and category, identify which allergens are likely present in this specific item. Consider the typical ingredients and cooking methods used for this type of dish.
+
+Return only the allergens that this specific menu item would realistically contain. If the item appears to be allergen-free or you cannot determine specific allergens, return an empty list." 

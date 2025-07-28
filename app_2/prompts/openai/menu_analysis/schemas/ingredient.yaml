@@ -1,0 +1,90 @@
+# Function Calling Schema - Ingredient Information Extraction
+extract_ingredients:
+  name: "extract_ingredients"
+  description: "Extract main ingredients and components contained in menu items"
+  parameters:
+    type: "object"
+    properties:
+      main_ingredients:
+        type: "array"
+        items:
+          type: "object"
+          properties:
+            ingredient:
+              type: "string"
+              description: "Ingredient name (English)"
+            category:
+              type: "string"
+              enum: ["protein", "vegetable", "grain", "dairy", "spice", "sauce", "oil", "other"]
+              description: "Primary ingredient category"
+            subcategory:
+              type: "string"
+              description: "More specific ingredient subcategory (e.g., 'red meat', 'leafy greens', 'whole grains', 'hard cheese')"
+            origin:
+              type: "string"
+              enum: ["animal", "plant", "processed", "synthetic"]
+              description: "Origin classification of the ingredient"
+            importance:
+              type: "string"
+              enum: ["primary", "secondary", "minor"]
+              description: "Ingredient importance (primary: main ingredient, secondary: supporting ingredient, minor: seasoning, etc.)"
+            preparation:
+              type: "string"
+              description: "Cooking method or preparation (e.g., grilled, steamed, raw, etc.)"
+            nutritional_category:
+              type: "string"
+              enum: ["carbohydrate", "protein", "fat", "fiber", "vitamin_mineral", "water", "other"]
+              description: "Primary nutritional contribution"
+          required: ["ingredient", "category", "origin", "importance"]
+        description: "List of main ingredients"
+      cooking_method:
+        type: "array"
+        items:
+          type: "string"
+        description: "Cooking methods used (e.g., stir-fry, boil, grill, steam, etc.)"
+      cuisine_category:
+        type: "string"
+        description: "Cuisine type or regional category (e.g., 'Italian', 'Asian', 'Mediterranean', 'American')"
+      flavor_profile:
+        type: "object"
+        properties:
+          taste:
+            type: "array"
+            items:
+              type: "string"
+              enum: ["sweet", "salty", "sour", "bitter", "umami", "spicy"]
+            description: "Main taste characteristics"
+          texture:
+            type: "string"
+            description: "Texture characteristics"
+          intensity:
+            type: "string"
+            enum: ["mild", "moderate", "strong"]
+            description: "Overall flavor intensity"
+      dietary_info:
+        type: "object"
+        properties:
+          vegetarian:
+            type: "boolean"
+            description: "Whether it's vegetarian-friendly"
+          vegan:
+            type: "boolean"
+            description: "Whether it's vegan-friendly"
+          gluten_free:
+            type: "boolean"
+            description: "Whether it's gluten-free"
+          dairy_free:
+            type: "boolean"
+            description: "Whether it's dairy-free"
+          low_carb:
+            type: "boolean"
+            description: "Whether it's low in carbohydrates"
+          keto_friendly:
+            type: "boolean"
+            description: "Whether it's keto diet friendly"
+      confidence:
+        type: "number"
+        minimum: 0
+        maximum: 1
+        description: "Analysis confidence level (0-1)"
+    required: ["main_ingredients", "cooking_method", "confidence"] 

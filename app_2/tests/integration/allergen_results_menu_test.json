@@ -1,0 +1,355 @@
+{
+  "image_file": "menu_test.webp",
+  "total_menu_items": 13,
+  "analyzed_items": 5,
+  "results": [
+    {
+      "menu_item": {
+        "name": "ブレンド",
+        "category": "Drinks",
+        "category_japanese": "ドリンク",
+        "price": "¥400",
+        "notes": ""
+      },
+      "allergen_result": {
+        "allergens": [
+          {
+            "allergen": "dairy",
+            "category": "dairy",
+            "severity": "major",
+            "likelihood": "medium",
+            "source": "likely milk or milk products in the blend as typical in drinks"
+          },
+          {
+            "allergen": "soy",
+            "category": "vegetables",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible emulsifiers or flavorings containing soy"
+          },
+          {
+            "allergen": "tree nuts",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible flavorings or additives"
+          },
+          {
+            "allergen": "peanuts",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination or flavorings"
+          },
+          {
+            "allergen": "eggs",
+            "category": "protein",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible minor ingredient or cross-contamination"
+          },
+          {
+            "allergen": "wheat",
+            "category": "grain",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible thickening agents or flavorings"
+          },
+          {
+            "allergen": "sesame",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible rare additives or flavorings"
+          }
+        ],
+        "allergen_free": false,
+        "dietary_warnings": [
+          "May contain dairy",
+          "Possible traces of soy, tree nuts, peanuts, eggs, wheat, and sesame due to flavorings or cross-contamination",
+          "Processed in facility with multiple allergens"
+        ],
+        "notes": "As a blended drink, typical ingredients might include milk or milk products, which are common allergens. Other allergens might be present due to flavorings, additives, or cross-contamination risks inherent in beverage preparation areas.",
+        "confidence": 0.8
+      },
+      "summary": {
+        "allergen_count": 7,
+        "allergen_free": false,
+        "confidence": 0.8,
+        "major_allergens": [
+          "dairy",
+          "soy",
+          "tree nuts",
+          "peanuts",
+          "eggs",
+          "wheat",
+          "sesame"
+        ]
+      }
+    },
+    {
+      "menu_item": {
+        "name": "アイスコーヒー",
+        "category": "Drinks",
+        "category_japanese": "ドリンク",
+        "price": "¥500",
+        "notes": ""
+      },
+      "allergen_result": {
+        "allergens": [
+          {
+            "allergen": "eggs",
+            "category": "protein",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "cross-contamination with other menu items or equipment"
+          },
+          {
+            "allergen": "dairy",
+            "category": "dairy",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible addition of milk or cream in preparation or cross-contamination"
+          },
+          {
+            "allergen": "wheat",
+            "category": "grain",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "cross-contamination in shared equipment or preparation area"
+          },
+          {
+            "allergen": "soy",
+            "category": "vegetables",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination or ingredient in flavorings/syrups"
+          },
+          {
+            "allergen": "tree nuts",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "cross-contamination in shared equipment or preparation area"
+          },
+          {
+            "allergen": "peanuts",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "cross-contamination in shared equipment or preparation area"
+          },
+          {
+            "allergen": "shellfish",
+            "category": "seafood",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "cross-contamination in shared equipment or preparation area"
+          },
+          {
+            "allergen": "fish",
+            "category": "seafood",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "cross-contamination in shared equipment or preparation area"
+          },
+          {
+            "allergen": "sesame",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "cross-contamination in shared equipment or preparation area"
+          }
+        ],
+        "allergen_free": true,
+        "dietary_warnings": [
+          "May contain traces of major allergens due to cross-contamination"
+        ],
+        "notes": "Ice coffee typically does not contain major allergens as main ingredients. Risks are primarily from cross-contamination or added flavorings.",
+        "confidence": 0.9
+      },
+      "summary": {
+        "allergen_count": 9,
+        "allergen_free": true,
+        "confidence": 0.9,
+        "major_allergens": [
+          "eggs",
+          "dairy",
+          "wheat",
+          "soy",
+          "tree nuts",
+          "peanuts",
+          "shellfish",
+          "fish",
+          "sesame"
+        ]
+      }
+    },
+    {
+      "menu_item": {
+        "name": "カフェラテ",
+        "category": "Drinks",
+        "category_japanese": "ドリンク",
+        "price": "¥600",
+        "notes": ""
+      },
+      "allergen_result": {
+        "allergens": [
+          {
+            "allergen": "dairy",
+            "category": "dairy",
+            "severity": "major",
+            "likelihood": "high",
+            "source": "milk in steamed milk for coffee beverage"
+          }
+        ],
+        "allergen_free": false,
+        "dietary_warnings": [
+          "Contains dairy (milk products)"
+        ],
+        "notes": "カフェラテ is a coffee beverage made with espresso and steamed milk, containing dairy products. There is minimal risk of other major allergens unless added as flavorings or toppings.",
+        "confidence": 1.0
+      },
+      "summary": {
+        "allergen_count": 1,
+        "allergen_free": false,
+        "confidence": 1.0,
+        "major_allergens": [
+          "dairy"
+        ]
+      }
+    },
+    {
+      "menu_item": {
+        "name": "カプチーノ",
+        "category": "Drinks",
+        "category_japanese": "ドリンク",
+        "price": "¥600",
+        "notes": ""
+      },
+      "allergen_result": {
+        "allergens": [
+          {
+            "allergen": "dairy",
+            "category": "dairy",
+            "severity": "major",
+            "likelihood": "high",
+            "source": "milk used in milk foam and espresso base"
+          }
+        ],
+        "allergen_free": false,
+        "dietary_warnings": [
+          "Contains dairy"
+        ],
+        "notes": "Cappuccino typically contains steamed milk which is a major dairy allergen. No other major allergens are typically present unless flavored or supplemented.",
+        "confidence": 0.95
+      },
+      "summary": {
+        "allergen_count": 1,
+        "allergen_free": false,
+        "confidence": 0.95,
+        "major_allergens": [
+          "dairy"
+        ]
+      }
+    },
+    {
+      "menu_item": {
+        "name": "アールグレイ",
+        "category": "Drinks",
+        "category_japanese": "ドリンク",
+        "price": "¥500",
+        "notes": ""
+      },
+      "allergen_result": {
+        "allergens": [
+          {
+            "allergen": "eggs",
+            "category": "protein",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination in preparation equipment"
+          },
+          {
+            "allergen": "dairy",
+            "category": "dairy",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination or milk additives in flavoring"
+          },
+          {
+            "allergen": "wheat",
+            "category": "grain",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination in shared kitchen"
+          },
+          {
+            "allergen": "soy",
+            "category": "vegetables",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination in kitchen or flavoring"
+          },
+          {
+            "allergen": "tree nuts",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination"
+          },
+          {
+            "allergen": "peanuts",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination"
+          },
+          {
+            "allergen": "shellfish",
+            "category": "seafood",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination"
+          },
+          {
+            "allergen": "fish",
+            "category": "seafood",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination"
+          },
+          {
+            "allergen": "sesame",
+            "category": "nuts_seeds",
+            "severity": "major",
+            "likelihood": "low",
+            "source": "possible cross-contamination"
+          }
+        ],
+        "allergen_free": false,
+        "dietary_warnings": [
+          "May contain traces of eggs, dairy, wheat, soy, tree nuts, peanuts, shellfish, fish, sesame due to cross-contamination"
+        ],
+        "notes": "Bergamot black tea typically does not contain major allergens as ingredients. Risks arise mainly from cross-contamination in preparation or added flavorings.",
+        "confidence": 0.95
+      },
+      "summary": {
+        "allergen_count": 9,
+        "allergen_free": false,
+        "confidence": 0.95,
+        "major_allergens": [
+          "eggs",
+          "dairy",
+          "wheat",
+          "soy",
+          "tree nuts",
+          "peanuts",
+          "shellfish",
+          "fish",
+          "sesame"
+        ]
+      }
+    }
+  ]
+}

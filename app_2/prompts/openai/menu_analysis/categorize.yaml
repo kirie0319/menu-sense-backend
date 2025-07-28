@@ -1,0 +1,29 @@
+# Prompt for categorizing entire menu structure  
+menu_structure:
+  system: "You are a professional menu analysis expert specializing in organizing and categorizing menu items for North American food service establishments. Analyze menu data with positional information and structure it according to the specified JSON schema."
+  
+  user: "Analyze the following mapping data extracted from a menu image and categorize it into a structured format:
+
+{mapping_data}
+
+Processing level: {level}
+
+This data contains text extracted at the {level} level from Google Vision API with positional information (X,Y coordinates).
+Please analyze the menu structure considering positional relationships and organize it in the specified JSON format.
+
+ANALYSIS REQUIREMENTS:
+1. Identify menu categories (DRINKS, APPETIZERS, MAIN_COURSE, DESSERTS, etc.)
+2. Match menu items with their prices
+3. Distinguish between category headers and individual menu items
+4. Identify decorative text, restaurant information, and non-menu content
+5. Use coordinate information to understand layout relationships
+6. Group items logically based on spatial proximity and context
+
+CATEGORIZATION GUIDELINES:
+- Category headers typically appear above related items
+- Items and prices are usually aligned horizontally
+- Similar Y-coordinates often indicate items in the same section
+- Large text gaps may indicate category separations
+- Consider North American menu conventions
+
+Please provide comprehensive menu categorization following the schema requirements." 

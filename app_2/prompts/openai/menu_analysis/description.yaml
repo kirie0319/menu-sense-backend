@@ -1,0 +1,10 @@
+system: "You are a culinary expert. Generate detailed and appealing descriptions for dishes."
+
+user: "Generate a detailed and appealing description for the following dish. Include characteristics, taste, cooking method, and cultural background in English.
+
+Dish: {menu_item}
+Category: {category}
+
+Please consider the typical characteristics and expectations of dishes in the '{category}' category when crafting your description within 300 characters.
+
+Description:" 

@@ -1,0 +1,24 @@
+# Function Calling Schema - Allergen Information Extraction (Simplified)
+extract_allergens:
+  name: "extract_allergens"
+  description: "Extract allergen information from menu items based on actual ingredients"
+  parameters:
+    type: "object"
+    properties:
+      allergens:
+        type: "array"
+        items:
+          type: "string"
+        description: "List of allergen names in English that are actually present in this specific dish. Return empty array if no allergens are present."
+      allergen_free:
+        type: "boolean"
+        description: "Whether the item is completely free of major allergens"
+      confidence:
+        type: "number"
+        minimum: 0
+        maximum: 1
+        description: "Analysis confidence level (0-1)"
+      notes:
+        type: "string"
+        description: "Brief additional notes if any (optional)"
+    required: ["allergen_free", "confidence"] 
