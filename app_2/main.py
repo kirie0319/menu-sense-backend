@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app_2.core.config import settings
+from app_2.core.cors import cors_settings
 from app_2.core.database import init_database, shutdown_database
 from app_2.api.v1.endpoints.pipeline import router as pipeline_router
 from app_2.api.v1.endpoints.menu_images import router as menu_images_router
@@ -34,9 +35,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
     
+    # CORS設定を追加
     app.add_middleware(
         CORSMiddleware,
-        **settings.cors.get_cors_config()
+        **cors_settings.get_cors_config()
     )
     
     # ルーターを追加
