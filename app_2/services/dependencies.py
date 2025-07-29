@@ -20,6 +20,10 @@ from app_2.infrastructure.integrations.redis.redis_client import RedisClient
 from app_2.infrastructure.integrations.redis.redis_publisher import RedisPublisher
 from app_2.infrastructure.integrations.redis.redis_subscriber import RedisSubscriber
 
+# Google integrations dependencies
+from app_2.infrastructure.integrations.google.google_vision_client import GoogleVisionClient, get_google_vision_client
+from app_2.infrastructure.integrations.google.google_credential_manager import GoogleCredentialManager, get_google_credential_manager
+
 
 # ==========================================
 # Repository Dependencies
@@ -101,6 +105,32 @@ def get_redis_subscriber(
 
 
 # ==========================================
+# Google Integrations Dependencies
+# ==========================================
+
+@lru_cache(maxsize=1)
+def get_google_credential_manager_dep() -> GoogleCredentialManager:
+    """
+    GoogleCredentialManagerシングルトンインスタンスを取得
+    
+    Returns:
+        GoogleCredentialManager: Google認証管理クライアント
+    """
+    return get_google_credential_manager()
+
+
+@lru_cache(maxsize=1)  
+def get_google_vision_client_dep() -> GoogleVisionClient:
+    """
+    GoogleVisionClientシングルトンインスタンスを取得
+    
+    Returns:
+        GoogleVisionClient: Google Vision API クライアント
+    """
+    return get_google_vision_client()
+
+
+# ==========================================
 # Type Aliases for Dependency Injection
 # ==========================================
 
@@ -112,4 +142,8 @@ DBSessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 # Redis Dependencies
 RedisClientDep = Annotated[RedisClient, Depends(get_redis_client)]
 RedisPublisherDep = Annotated[RedisPublisher, Depends(get_redis_publisher)]
-RedisSubscriberDep = Annotated[RedisSubscriber, Depends(get_redis_subscriber)] 
+RedisSubscriberDep = Annotated[RedisSubscriber, Depends(get_redis_subscriber)]
+
+# Google Integrations Dependencies
+GoogleCredentialManagerDep = Annotated[GoogleCredentialManager, Depends(get_google_credential_manager_dep)]
+GoogleVisionClientDep = Annotated[GoogleVisionClient, Depends(get_google_vision_client_dep)] 

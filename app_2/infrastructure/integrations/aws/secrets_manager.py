@@ -28,9 +28,9 @@ class SecretsManager:
         """
         self.client = boto3.client(
             'secretsmanager',
-            aws_access_key_id=settings.aws.aws_access_key_id,
-            aws_secret_access_key=settings.aws.aws_secret_access_key,
-            region_name=settings.aws.aws_region
+            aws_access_key_id=settings.aws.access_key_id,
+            aws_secret_access_key=settings.aws.secret_access_key,
+            region_name=settings.aws.region
         )
 
     async def get_secret(self, secret_name: str) -> Dict[str, Any]:

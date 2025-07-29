@@ -1,9 +1,13 @@
 """
-Google Credential Manager - Minimal Implementation
+Google Credential Manager - AWS Secrets Manager Integration
 """
 
+import json
+import tempfile
+import os
 from functools import lru_cache
 from google.cloud import vision, translate_v2 as translate
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 from app_2.core.config import settings
@@ -20,8 +24,50 @@ class GoogleCredentialManager:
         self._vision_client = None
         self._translate_client = None
         self._search_service = None
+        self._credentials = None
+
+    async def _get_google_credentials(self):
+        """AWS Secrets ManagerからGoogle認証情報を取得"""
+        if self._credentials is None:
+            try:
+                from app_2.infrastructure.integrations.aws.secrets_manager import SecretsManager
+                
+                secrets_manager = SecretsManager()
+                secret_name = settings.aws.secret_name
+                
+                logger.info(f"Getting Google credentials from AWS Secrets Manager: {secret_name}")
+                secret_data = await secrets_manager.get_secret(secret_name)
+                
+                # Google Service Account の認証情報を作成
+                self._credentials = service_account.Credentials.from_service_account_info(secret_data)
+                logger.info("✅ Google credentials loaded successfully from AWS Secrets Manager")
+                
+            except Exception as e:
+                logger.error(f"❌ Failed to get Google credentials from AWS Secrets Manager: {e}")
+                # フォールバック: Application Default Credentials を試行
+                logger.info("Falling back to Application Default Credentials")
+                self._credentials = None
+                
+        return self._credentials
+
+    async def get_vision_client_async(self):
+        """非同期でVision Clientを取得"""
+        if self._vision_client is None:
+            logger.info("Creating new Google Vision API client")
+            credentials = await self._get_google_credentials()
+            
+            if credentials:
+                self._vision_client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("✅ Vision client created with AWS Secrets Manager credentials")
+            else:
+                # フォールバック
+                self._vision_client = vision.ImageAnnotatorClient()
+                logger.warning("⚠️ Vision client created with default credentials")
+                
+        return self._vision_client
 
     def get_vision_client(self):
+        """同期でVision Clientを取得（後方互換性）"""
         if self._vision_client is None:
             logger.info("Creating new Google Vision API client")
             self._vision_client = vision.ImageAnnotatorClient()
@@ -42,6 +88,7 @@ class GoogleCredentialManager:
                 logger.warning(f"Failed to close existing Vision client: {e}")
         
         self._vision_client = None
+        self._credentials = None  # 認証情報もリセット
         # 次回のget_vision_client()呼び出し時に新しいクライアントが作成される
 
     def get_translate_client(self):

@@ -17,7 +17,13 @@ logger = get_logger("google_vision_client")
 class GoogleVisionClient:
     def __init__(self):
         self.credential_manager = get_google_credential_manager()
-        self.client = self.credential_manager.get_vision_client()
+        self.client = None
+
+    async def _ensure_client(self):
+        """認証済みクライアントを確保"""
+        if self.client is None:
+            self.client = await self.credential_manager.get_vision_client_async()
+        return self.client
 
     async def extract_text_with_positions(self, image_data: bytes, level: str = "word", max_retries: int = 2) -> List[Dict[str, Union[str, float]]]:
         """
@@ -49,16 +55,25 @@ class GoogleVisionClient:
                     "unavailable"
                 ])
                 
-                if is_connection_error and attempt < max_retries:
+                # 認証エラーの検出
+                is_auth_error = any(keyword in error_message for keyword in [
+                    "default credentials",
+                    "authentication",
+                    "credentials",
+                    "permission denied",
+                    "unauthorized"
+                ])
+                
+                if (is_connection_error or is_auth_error) and attempt < max_retries:
                     wait_time = 2 ** attempt  # 指数バックオフ: 1秒, 2秒, 4秒...
                     logger.warning(
-                        f"Vision API connection error detected (attempt {attempt + 1}/{max_retries + 1}): {e}. "
+                        f"Vision API error detected (attempt {attempt + 1}/{max_retries + 1}): {e}. "
                         f"Resetting client and retrying in {wait_time} seconds..."
                     )
                     
                     # クライアントを再作成
                     self.credential_manager.reset_vision_client()
-                    self.client = self.credential_manager.get_vision_client()
+                    self.client = None  # 次回の_ensure_client()で再作成される
                     
                     await asyncio.sleep(wait_time)
                     continue
@@ -91,8 +106,11 @@ class GoogleVisionClient:
         Returns:
             List[Dict]: テキストと位置情報の辞書リスト
         """
+        # 認証済みクライアントを確保
+        client = await self._ensure_client()
+        
         image = vision.Image(content=image_data)
-        response = self.client.document_text_detection(image=image)
+        response = client.document_text_detection(image=image)
         
         if response.error.message:
             raise Exception(f"Vision API error: {response.error.message}")
