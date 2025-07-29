@@ -91,7 +91,24 @@ class GoogleCredentialManager:
         self._credentials = None  # 認証情報もリセット
         # 次回のget_vision_client()呼び出し時に新しいクライアントが作成される
 
+    async def get_translate_client_async(self):
+        """非同期でTranslate Clientを取得"""
+        if self._translate_client is None:
+            logger.info("Creating new Google Translate API client")
+            credentials = await self._get_google_credentials()
+            
+            if credentials:
+                self._translate_client = translate.Client(credentials=credentials)
+                logger.info("✅ Translate client created with AWS Secrets Manager credentials")
+            else:
+                # フォールバック
+                self._translate_client = translate.Client()
+                logger.warning("⚠️ Translate client created with default credentials")
+                
+        return self._translate_client
+
     def get_translate_client(self):
+        """同期でTranslate Clientを取得（後方互換性）"""
         if self._translate_client is None:
             self._translate_client = translate.Client()
         return self._translate_client

@@ -22,6 +22,7 @@ from app_2.infrastructure.integrations.redis.redis_subscriber import RedisSubscr
 
 # Google integrations dependencies
 from app_2.infrastructure.integrations.google.google_vision_client import GoogleVisionClient, get_google_vision_client
+from app_2.infrastructure.integrations.google.google_translate_client import GoogleTranslateClient, get_google_translate_client
 from app_2.infrastructure.integrations.google.google_credential_manager import GoogleCredentialManager, get_google_credential_manager
 
 
@@ -130,6 +131,17 @@ def get_google_vision_client_dep() -> GoogleVisionClient:
     return get_google_vision_client()
 
 
+@lru_cache(maxsize=1)  
+def get_google_translate_client_dep() -> GoogleTranslateClient:
+    """
+    GoogleTranslateClientシングルトンインスタンスを取得
+    
+    Returns:
+        GoogleTranslateClient: Google Translate API クライアント
+    """
+    return get_google_translate_client()
+
+
 # ==========================================
 # Type Aliases for Dependency Injection
 # ==========================================
@@ -146,4 +158,5 @@ RedisSubscriberDep = Annotated[RedisSubscriber, Depends(get_redis_subscriber)]
 
 # Google Integrations Dependencies
 GoogleCredentialManagerDep = Annotated[GoogleCredentialManager, Depends(get_google_credential_manager_dep)]
-GoogleVisionClientDep = Annotated[GoogleVisionClient, Depends(get_google_vision_client_dep)] 
+GoogleVisionClientDep = Annotated[GoogleVisionClient, Depends(get_google_vision_client_dep)]
+GoogleTranslateClientDep = Annotated[GoogleTranslateClient, Depends(get_google_translate_client_dep)] 
