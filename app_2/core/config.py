@@ -152,30 +152,6 @@ class CelerySettings(BaseModel):
 
 
 # ==========================================
-# CORS Settings
-# ==========================================
-
-class CORSSettings(BaseModel):
-    """CORS設定"""
-    
-    # 環境変数から読み込み、カンマ区切りで複数指定可能
-    origins: List[str] = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-    allow_credentials: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
-    allow_methods: List[str] = os.getenv("CORS_ALLOW_METHODS", "*").split(",")
-    allow_headers: List[str] = os.getenv("CORS_ALLOW_HEADERS", "*").split(",")
-    expose_headers: List[str] = os.getenv("CORS_EXPOSE_HEADERS", "*").split(",")
-    
-    def get_cors_config(self) -> dict:
-        return {
-            "allow_origins": self.origins,
-            "allow_credentials": self.allow_credentials,
-            "allow_methods": self.allow_methods,
-            "allow_headers": self.allow_headers,
-            "expose_headers": self.expose_headers
-        }
-
-
-# ==========================================
 # Unified Configuration Management
 # ==========================================
 
@@ -187,7 +163,6 @@ class Settings:
         self.ai = AISettings()
         self.aws = AWSSettings()
         self.celery = CelerySettings()
-        self.cors = CORSSettings()
     
     def validate_all(self) -> Dict[str, List[str]]:
         """全設定の妥当性を検証"""
@@ -295,7 +270,6 @@ base_settings = settings.base
 ai_settings = settings.ai
 aws_settings = settings.aws
 celery_settings = settings.celery
-cors_settings = settings.cors
 
 
 # ==========================================
@@ -340,7 +314,6 @@ __all__ = [
     "AISettings", 
     "AWSSettings",
     "CelerySettings",
-    "CORSSettings",
     "Settings",
     
     # Compatibility aliases
@@ -348,7 +321,6 @@ __all__ = [
     "ai_settings",
     "aws_settings", 
     "celery_settings",
-    "cors_settings",
     
     # Utility functions
     "validate_settings",
