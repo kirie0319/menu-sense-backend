@@ -158,15 +158,12 @@ class CelerySettings(BaseModel):
 class CORSSettings(BaseModel):
     """CORS設定"""
     
-    origins: List[str] = [
-        "http://localhost:3000",
-        "https://menu-sense-frontend.vercel.app",
-        "https://app.yuyadevs.org",
-    ]
-    allow_credentials: bool = True
-    allow_methods: List[str] = ["*"]
-    allow_headers: List[str] = ["*"]
-    expose_headers: List[str] = ["*"]
+    # 環境変数から読み込み、カンマ区切りで複数指定可能
+    origins: List[str] = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    allow_credentials: bool = os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true"
+    allow_methods: List[str] = os.getenv("CORS_ALLOW_METHODS", "*").split(",")
+    allow_headers: List[str] = os.getenv("CORS_ALLOW_HEADERS", "*").split(",")
+    expose_headers: List[str] = os.getenv("CORS_EXPOSE_HEADERS", "*").split(",")
     
     def get_cors_config(self) -> dict:
         return {

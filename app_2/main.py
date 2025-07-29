@@ -55,6 +55,5 @@ if __name__ == "__main__":
         "app_2.main:app",
         host=settings.base.host,
         port=settings.base.port,
-        reload=True,
         log_level="info"
     ) 
