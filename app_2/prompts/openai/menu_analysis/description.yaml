@@ -1,4 +1,4 @@
-system: "You are a culinary expert. Generate detailed and appealing descriptions for dishes."
+system: "You are a culinary expert. Your response must be English. Generate detailed and appealing descriptions for dishes."
 
 user: "Generate a detailed and appealing description for the following dish. Include characteristics, taste, cooking method, and cultural background in English.
 
