@@ -73,6 +73,49 @@ class MenuRepositoryImpl(MenuRepositoryInterface):
             logger.error(f"Failed to save menu {menu.id} with session {session_id}: {e}")
             raise
 
+    async def bulk_save_with_session(self, menus: List[MenuEntity], session_id: str) -> List[MenuEntity]:
+        """
+        複数メニューの一括保存（パフォーマンス最適化版）
+        
+        37個のメニューを個別に保存すると37回のcommitが発生し31秒の遅延が発生します。
+        一括保存により1回のcommitで処理時間を大幅に短縮します。
+        
+        Args:
+            menus: 保存するメニューエンティティのリスト
+            session_id: セッションID
+            
+        Returns:
+            List[MenuEntity]: 保存されたメニューエンティティのリスト
+        """
+        if not menus:
+            return []
+        
+        try:
+            saved_entities = []
+            menu_models = []
+            
+            # 全てのエンティティをモデルに変換
+            for menu in menus:
+                menu_model = MenuModel.from_entity_with_session(menu, session_id)
+                menu_models.append(menu_model)
+                self.session.add(menu_model)
+            
+            # 一括でコミット（1回のみ）
+            await self.session.commit()
+            
+            # 一括でリフレッシュ
+            for menu_model in menu_models:
+                await self.session.refresh(menu_model)
+                saved_entities.append(menu_model.to_entity())
+            
+            logger.info(f"Bulk saved {len(saved_entities)} menus with session: {session_id}")
+            return saved_entities
+            
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Failed to bulk save {len(menus)} menus with session {session_id}: {e}")
+            raise
+
     async def get_by_id(self, menu_id: str) -> Optional[MenuEntity]:
         """
         IDでメニューを取得

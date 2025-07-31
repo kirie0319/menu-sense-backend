@@ -1,20 +1,8 @@
-"""
-CORS設定
-Cross-Origin Resource Sharingの設定を管理
-"""
 from pydantic import BaseModel
 from typing import List
-import os
-from dotenv import load_dotenv
-
-# 環境変数の読み込み
-load_dotenv()
-
 
 class CORSSettings(BaseModel):
     """CORS設定クラス"""
-    
-    # デフォルトオリジンリスト
     origins: List[str] = [
         "http://localhost:3000",
         "https://menu-sense-frontend.vercel.app",
@@ -60,8 +48,5 @@ class CORSSettings(BaseModel):
 # グローバルインスタンス
 cors_settings = CORSSettings()
 
-
-# 後方互換性のための関数
 def get_cors_settings():
-    """CORS設定を取得（後方互換性用）"""
     return cors_settings

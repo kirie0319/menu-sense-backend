@@ -1,0 +1,472 @@
+[
+  {
+    "text": "おいしいものが揃ってる",
+    "x_center": 173.0,
+    "y_center": 46.0
+  },
+  {
+    "text": "居酒屋",
+    "x_center": 201.5,
+    "y_center": 128.0
+  },
+  {
+    "text": "やきとり",
+    "x_center": 106.0,
+    "y_center": 238.5
+  },
+  {
+    "text": "サラダ",
+    "x_center": 396.0,
+    "y_center": 238.0
+  },
+  {
+    "text": "お酒",
+    "x_center": 697.5,
+    "y_center": 242.0
+  },
+  {
+    "text": "•",
+    "x_center": 61.5,
+    "y_center": 295.0
+  },
+  {
+    "text": "鵝串",
+    "x_center": 103.5,
+    "y_center": 294.0
+  },
+  {
+    "text": "200円",
+    "x_center": 269.0,
+    "y_center": 292.0
+  },
+  {
+    "text": "・シーザーサラダ",
+    "x_center": 407.5,
+    "y_center": 293.0
+  },
+  {
+    "text": "600円",
+    "x_center": 567.5,
+    "y_center": 292.5
+  },
+  {
+    "text": "生ビール",
+    "x_center": 689.5,
+    "y_center": 293.0
+  },
+  {
+    "text": "600円",
+    "x_center": 856.0,
+    "y_center": 291.5
+  },
+  {
+    "text": "・ねぎま串",
+    "x_center": 99.0,
+    "y_center": 319.5
+  },
+  {
+    "text": "300円",
+    "x_center": 269.5,
+    "y_center": 316.5
+  },
+  {
+    "text": "・和風ポテトサラダ",
+    "x_center": 425.5,
+    "y_center": 318.5
+  },
+  {
+    "text": "500円",
+    "x_center": 569.0,
+    "y_center": 317.5
+  },
+  {
+    "text": "焼酎(芋・麦)",
+    "x_center": 710.0,
+    "y_center": 318.5
+  },
+  {
+    "text": "500円",
+    "x_center": 857.5,
+    "y_center": 318.0
+  },
+  {
+    "text": "・つくね串",
+    "x_center": 97.5,
+    "y_center": 346.0
+  },
+  {
+    "text": "300円",
+    "x_center": 270.0,
+    "y_center": 343.0
+  },
+  {
+    "text": ".",
+    "x_center": 355.5,
+    "y_center": 346.5
+  },
+  {
+    "text": "海藻サラダ",
+    "x_center": 414.0,
+    "y_center": 344.5
+  },
+  {
+    "text": "400円",
+    "x_center": 566.5,
+    "y_center": 344.0
+  },
+  {
+    "text": "・日本酒に冷・熱)",
+    "x_center": 721.5,
+    "y_center": 345.5
+  },
+  {
+    "text": "400円",
+    "x_center": 855.5,
+    "y_center": 344.0
+  },
+  {
+    "text": "・皮串",
+    "x_center": 83.5,
+    "y_center": 372.5
+  },
+  {
+    "text": "300円",
+    "x_center": 270.0,
+    "y_center": 369.0
+  },
+  {
+    "text": "•",
+    "x_center": 355.0,
+    "y_center": 371.5
+  },
+  {
+    "text": "鶏肉の南蛮サラダ",
+    "x_center": 441.0,
+    "y_center": 371.0
+  },
+  {
+    "text": "700円",
+    "x_center": 568.0,
+    "y_center": 369.0
+  },
+  {
+    "text": "ハイボール",
+    "x_center": 697.0,
+    "y_center": 370.0
+  },
+  {
+    "text": "700円",
+    "x_center": 856.5,
+    "y_center": 369.0
+  },
+  {
+    "text": "•",
+    "x_center": 60.0,
+    "y_center": 398.5
+  },
+  {
+    "text": "砂肝串",
+    "x_center": 107.5,
+    "y_center": 397.0
+  },
+  {
+    "text": "200円",
+    "x_center": 268.0,
+    "y_center": 395.0
+  },
+  {
+    "text": "•",
+    "x_center": 355.0,
+    "y_center": 398.5
+  },
+  {
+    "text": "手羽先串",
+    "x_center": 112.5,
+    "y_center": 423.0
+  },
+  {
+    "text": "300円",
+    "x_center": 271.0,
+    "y_center": 420.0
+  },
+  {
+    "text": "豆腐とアボカドのサラダカプレーゼ",
+    "x_center": 451.5,
+    "y_center": 408.5
+  },
+  {
+    "text": "500円",
+    "x_center": 568.5,
+    "y_center": 396.0
+  },
+  {
+    "text": "梅酒",
+    "x_center": 686.0,
+    "y_center": 396.5
+  },
+  {
+    "text": "500円",
+    "x_center": 857.5,
+    "y_center": 394.5
+  },
+  {
+    "text": "300円",
+    "x_center": 568.5,
+    "y_center": 421.0
+  },
+  {
+    "text": "サングリア",
+    "x_center": 694.5,
+    "y_center": 422.0
+  },
+  {
+    "text": "300円",
+    "x_center": 856.5,
+    "y_center": 420.5
+  },
+  {
+    "text": "・はつ串(鶏の心臓)",
+    "x_center": 136.0,
+    "y_center": 447.5
+  },
+  {
+    "text": "300円",
+    "x_center": 269.0,
+    "y_center": 446.5
+  },
+  {
+    "text": "・ベーコンのサラダ",
+    "x_center": 415.5,
+    "y_center": 447.5
+  },
+  {
+    "text": "300円",
+    "x_center": 568.5,
+    "y_center": 446.5
+  },
+  {
+    "text": "ウィスキー",
+    "x_center": 692.5,
+    "y_center": 449.0
+  },
+  {
+    "text": "300円",
+    "x_center": 855.5,
+    "y_center": 446.0
+  },
+  {
+    "text": "•",
+    "x_center": 61.5,
+    "y_center": 475.0
+  },
+  {
+    "text": "こころ串(鶏の肝)",
+    "x_center": 136.5,
+    "y_center": 474.5
+  },
+  {
+    "text": "300円",
+    "x_center": 270.0,
+    "y_center": 472.0
+  },
+  {
+    "text": "・水菜と大根のサラダ300円",
+    "x_center": 475.5,
+    "y_center": 473.0
+  },
+  {
+    "text": "揚げ物",
+    "x_center": 126.5,
+    "y_center": 557.0
+  },
+  {
+    "text": "デザート",
+    "x_center": 418.5,
+    "y_center": 557.5
+  },
+  {
+    "text": "ソフトドリンク",
+    "x_center": 744.0,
+    "y_center": 557.0
+  },
+  {
+    "text": ".",
+    "x_center": 66.0,
+    "y_center": 606.5
+  },
+  {
+    "text": "海老の天ぷら",
+    "x_center": 131.5,
+    "y_center": 605.5
+  },
+  {
+    "text": "500円",
+    "x_center": 271.0,
+    "y_center": 606.0
+  },
+  {
+    "text": "•",
+    "x_center": 363.0,
+    "y_center": 606.0
+  },
+  {
+    "text": "抹茶アイスクリーム",
+    "x_center": 441.5,
+    "y_center": 605.5
+  },
+  {
+    "text": "500円",
+    "x_center": 568.0,
+    "y_center": 606.0
+  },
+  {
+    "text": "•",
+    "x_center": 653.0,
+    "y_center": 606.5
+  },
+  {
+    "text": "・緑茶(冷・温)",
+    "x_center": 716.0,
+    "y_center": 606.5
+  },
+  {
+    "text": "500円",
+    "x_center": 856.0,
+    "y_center": 605.5
+  },
+  {
+    "text": "野菜のかき揚げ",
+    "x_center": 143.5,
+    "y_center": 630.5
+  },
+  {
+    "text": "500円",
+    "x_center": 270.5,
+    "y_center": 631.0
+  },
+  {
+    "text": "•",
+    "x_center": 364.0,
+    "y_center": 630.5
+  },
+  {
+    "text": "かぼちゃのプリン",
+    "x_center": 434.5,
+    "y_center": 629.5
+  },
+  {
+    "text": "500円",
+    "x_center": 569.0,
+    "y_center": 631.0
+  },
+  {
+    "text": "・ウーロン茶(冷・温)",
+    "x_center": 729.0,
+    "y_center": 631.0
+  },
+  {
+    "text": "500円",
+    "x_center": 855.5,
+    "y_center": 631.0
+  },
+  {
+    "text": "いかの唐揚げ",
+    "x_center": 133.0,
+    "y_center": 654.0
+  },
+  {
+    "text": "400円",
+    "x_center": 268.0,
+    "y_center": 655.0
+  },
+  {
+    "text": "•",
+    "x_center": 364.0,
+    "y_center": 655.5
+  },
+  {
+    "text": "さくらんぼのコンポート400円",
+    "x_center": 487.0,
+    "y_center": 654.0
+  },
+  {
+    "text": "・コーラ",
+    "x_center": 675.5,
+    "y_center": 655.0
+  },
+  {
+    "text": "400円",
+    "x_center": 854.0,
+    "y_center": 655.0
+  },
+  {
+    "text": "・たこの唐",
+    "x_center": 101.0,
+    "y_center": 679.5
+  },
+  {
+    "text": "300円",
+    "x_center": 269.5,
+    "y_center": 678.5
+  },
+  {
+    "text": "•黒糖わらび餅",
+    "x_center": 419.5,
+    "y_center": 679.0
+  },
+  {
+    "text": "300円",
+    "x_center": 567.0,
+    "y_center": 678.5
+  },
+  {
+    "text": "・ジンジャーエール",
+    "x_center": 711.0,
+    "y_center": 679.5
+  },
+  {
+    "text": "300円",
+    "x_center": 855.0,
+    "y_center": 679.5
+  },
+  {
+    "text": "・カキフライ",
+    "x_center": 101.0,
+    "y_center": 704.5
+  },
+  {
+    "text": "300円",
+    "x_center": 268.5,
+    "y_center": 703.5
+  },
+  {
+    "text": "・スイカ",
+    "x_center": 388.0,
+    "y_center": 704.0
+  },
+  {
+    "text": "300円",
+    "x_center": 566.5,
+    "y_center": 703.5
+  },
+  {
+    "text": "・カルピスウォーター",
+    "x_center": 718.5,
+    "y_center": 704.0
+  },
+  {
+    "text": "300円/",
+    "x_center": 861.5,
+    "y_center": 704.0
+  },
+  {
+    "text": "おいしいごはんをもりもり食べよう!",
+    "x_center": 209.0,
+    "y_center": 768.5
+  },
+  {
+    "text": "お気軽にスタッフにお尋ねください。",
+    "x_center": 226.5,
+    "y_center": 799.0
+  }
+]

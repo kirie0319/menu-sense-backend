@@ -11,27 +11,7 @@ logger = get_logger("description_client")
 
 
 class DescriptionClient(OpenAIBaseClient):
-    """
-    詳細説明生成専用クライアント（プロンプトベース）
-    
-    メニュー項目の詳細で魅力的な説明を生成
-    """
-
     async def generate_description(self, menu_item: str, category: str = "") -> Dict[str, Any]:
-        """
-        メニュー項目の詳細説明を生成（プロンプトベース）
-        
-        Args:
-            menu_item: メニュー項目名
-            category: カテゴリ（オプション）
-            
-        Returns:
-            Dict[str, Any]: 説明情報
-            {
-                "description": "生成された詳細説明",
-                "confidence": 0.9
-            }
-        """
         try:
             # デバッグ用ログ
             logger.debug(f"generate_description called with menu_item='{menu_item}', category='{category}'")

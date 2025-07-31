@@ -65,7 +65,10 @@ class MenuSaveService:
             # 🔄 重複チェック用セット（name + category の組み合わせ）
             saved_items_set = set()
             
-            # カテゴリごとに商品を保存
+            # 🚀 一括保存用のエンティティリストを準備
+            entities_to_save = []
+            
+            # カテゴリごとに商品を処理
             for category in categories:
                 category_name = category.get("name", "")
                 category_japanese = category.get("japanese_name", "")
@@ -73,7 +76,7 @@ class MenuSaveService:
                 
                 logger.info(f"Processing category: {category_japanese} ({category_name}) with {len(items)} items")
                 
-                # カテゴリ内の各商品を保存
+                # カテゴリ内の各商品をエンティティに変換
                 for item in items:
                     try:
                         item_name = item.get("name", "").strip()
@@ -107,19 +110,28 @@ class MenuSaveService:
                             gen_image=None  # 生成画像は後で画像生成タスクで更新
                         )
                         
-                        # DBに保存
-                        if session_id:
-                            saved_entity = await self.menu_repository.save_with_session(menu_entity, session_id)
-                        else:
-                            # session_idがない場合は従来のsaveを使用（ただし、この場合NotImplementedErrorが発生）
-                            saved_entity = await self.menu_repository.save(menu_entity)
-                        saved_entities.append(saved_entity)
+                        # 一括保存用リストに追加
+                        entities_to_save.append(menu_entity)
                         
-                        logger.debug(f"✅ Saved unique menu item: {saved_entity.name} - {saved_entity.price}")
+                        logger.debug(f"✅ Prepared menu item for bulk save: {menu_entity.name} - {menu_entity.price}")
                         
                     except Exception as e:
-                        logger.error(f"Failed to save menu item {item}: {e}")
+                        logger.error(f"Failed to prepare menu item {item}: {e}")
                         continue
+            
+            # 🚀 一括保存実行（パフォーマンス最適化）
+            if entities_to_save:
+                if session_id:
+                    saved_entities = await self.menu_repository.bulk_save_with_session(entities_to_save, session_id)
+                    logger.info(f"🚀 Bulk save completed: {len(saved_entities)} items in single transaction")
+                else:
+                    # session_idがない場合は個別保存にフォールバック
+                    for entity in entities_to_save:
+                        saved_entity = await self.menu_repository.save(entity)
+                        saved_entities.append(saved_entity)
+                    logger.info(f"Individual save completed: {len(saved_entities)} items")
+            else:
+                logger.warning("No items to save after duplicate filtering")
             
             # 🔄 重複除去結果をログ出力
             total_items_processed = sum(len(cat.get("items", [])) for cat in categories)

@@ -1,5 +1,4 @@
 """
-プロンプト管理ユーティリティ (ミニマム版)
 YAML基盤でのシンプルなプロンプト管理
 """
 from typing import Dict
@@ -16,9 +15,6 @@ class PromptLoader:
     def __init__(self, base_path: str = "app_2/prompts"):
         """
         プロンプトローダーを初期化
-        
-        Args:
-            base_path: プロンプトファイルのベースパス
         """
         self.base_path = Path(base_path)
         
@@ -30,17 +26,6 @@ class PromptLoader:
     ) -> Dict[str, str]:
         """
         プロンプトを読み込み
-        
-        Args:
-            provider: AIプロバイダー名 (openai, google)
-            category: カテゴリー名 (menu_analysis)
-            prompt_name: プロンプト名 (description, allergen, ingredient, categorize)
-        
-        Returns:
-            Dict: プロンプトデータ (system, user)
-            
-        Raises:
-            FileNotFoundError: プロンプトファイルが見つからない場合
         """
         file_path = self.base_path / provider / category / f"{prompt_name}.yaml"
         
@@ -61,13 +46,6 @@ class PromptLoader:
     def format_prompt(self, template: str, **kwargs) -> str:
         """
         テンプレート変数を置換
-        
-        Args:
-            template: プロンプトテンプレート文字列
-            **kwargs: 置換する変数
-            
-        Returns:
-            str: 変数が置換されたプロンプト
         """
         try:
             return template.format(**kwargs)

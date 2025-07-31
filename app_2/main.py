@@ -3,11 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app_2.core.config import settings
-from app_2.core.cors import cors_settings
+from app_2.core.cors import get_cors_settings
 from app_2.core.database import init_database, shutdown_database
 from app_2.api.v1.endpoints.pipeline import router as pipeline_router
 from app_2.api.v1.endpoints.menu_images import router as menu_images_router
 from app_2.api.v1.endpoints.sse import router as sse_router
+from app_2.api.v1.endpoints.service import router as service_router
 
 async def shutdown_redis():
     """Redisリソースのグローバルクリーンアップ"""
@@ -38,13 +39,14 @@ def create_app() -> FastAPI:
     # CORS設定を追加
     app.add_middleware(
         CORSMiddleware,
-        **cors_settings.get_cors_config()
+        **get_cors_settings().get_cors_config()
     )
     
     # ルーターを追加
     app.include_router(pipeline_router, prefix="/api/v1")
     app.include_router(menu_images_router, prefix="/api/v1")
     app.include_router(sse_router, prefix="/api/v1")  # SSEエンドポイント
+    app.include_router(service_router, prefix="/api/v1")  # サービステストエンドポイント
     
     return app
 

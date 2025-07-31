@@ -31,6 +31,34 @@ class MenuRepositoryInterface(ABC):
         pass
     
     @abstractmethod
+    async def save_with_session(self, menu: MenuEntity, session_id: str) -> MenuEntity:
+        """
+        セッションID付きでメニューを保存
+        
+        Args:
+            menu: 保存するメニューエンティティ
+            session_id: セッションID
+            
+        Returns:
+            MenuEntity: 保存されたメニューエンティティ
+        """
+        pass
+    
+    @abstractmethod
+    async def bulk_save_with_session(self, menus: List[MenuEntity], session_id: str) -> List[MenuEntity]:
+        """
+        複数メニューの一括保存（パフォーマンス最適化版）
+        
+        Args:
+            menus: 保存するメニューエンティティのリスト
+            session_id: セッションID
+            
+        Returns:
+            List[MenuEntity]: 保存されたメニューエンティティのリスト
+        """
+        pass
+    
+    @abstractmethod
     async def get_by_id(self, menu_id: str) -> Optional[MenuEntity]:
         """
         IDでメニューを取得

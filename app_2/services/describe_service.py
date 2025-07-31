@@ -16,10 +16,6 @@ class DescribeService:
     def __init__(self, description_client: Optional[DescriptionClient] = None):
         """
         詳細説明サービスを初期化
-        
-        Args:
-            description_client: DescriptionClientインスタンス（テスト用）
-                              Noneの場合はシングルトンクライアンスを使用
         """
         self.description_client = description_client or get_description_client()
         logger.info("DescribeService initialized")
@@ -31,17 +27,6 @@ class DescribeService:
     ) -> Dict[str, Any]:
         """
         メニュー項目の詳細説明を生成
-        
-        Args:
-            menu_item: メニュー項目名
-            category: カテゴリ（オプション）
-            
-        Returns:
-            Dict[str, Any]: 詳細説明データ
-            
-        Raises:
-            ValueError: 入力メニュー項目が無効な場合
-            Exception: 説明生成処理が失敗した場合
         """
         if not menu_item or not menu_item.strip():
             logger.warning("Empty or whitespace-only menu item provided for description")
